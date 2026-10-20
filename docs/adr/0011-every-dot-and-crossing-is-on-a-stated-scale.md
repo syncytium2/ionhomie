@@ -48,3 +48,7 @@ Two scales, both printed on every stage, and consistent with each other and with
 - `scripts/check.mjs` fails a stage that draws almost no ions. It was added after the wander's first frame,
   with a negative time step, turned every dot into NaN at phone width; breaking the stage on purpose was
   checked to turn the check red.
+
+*Carried out, a correction, 2026-10-20 (Tony: "looks like ping pong"): a crossing now takes only a dot
+already within ~80 px of the pore, which walks there at ~30 px/s and is let go just past it; with none near,
+the crossing waits. See [feedback/2026-10-20-second-look.md](../feedback/2026-10-20-second-look.md).*

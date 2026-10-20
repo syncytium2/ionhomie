@@ -423,7 +423,7 @@ export interface Pathway {
 }
 type Where = "in" | "out";
 interface Particle { ion: Species; where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; busy: boolean }
-interface Crossing { p: number; ion: Species; dir: number; t: number; dur: number; part?: Particle; x0: number; y0: number; da: number; rim: boolean; delay: number }
+interface Crossing { p: number; ion: Species; dir: number; t: number; dur: number; walk?: number; part?: Particle; x0: number; y0: number; da: number; rim: boolean; delay: number }
 export interface StageOpts { height: number; ions: Species[]; mode: "fixed" | "amounts"; cellVolume: number }
 
 export class CellStage {
@@ -488,30 +488,40 @@ export class CellStage {
     const a = this.pathways[p].angle + da;
     return [g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r];
   }
-  /** Move one real dot through pathway p (dir +1 out, −1 in). Returns false if none was on the source side. */
-  transfer(p: number, ion: Species, dir: number, delay = 0, da = 0) {
+  /** The source-side dots of this ion close enough to pathway p's mouth to cross (nearest first). */
+  private nearby(p: number, ion: Species, dir: number) {
     const g = this.geometry(), from: Where = dir > 0 ? "in" : "out";
     const [mx, my] = this.mouth(p, g, dir > 0 ? g.R - 16 * g.k : g.R + 16 * g.k);
-    let best: Particle | undefined, bd = Infinity;
-    for (const q of this.parts) {
-      if (q.ion !== ion || q.where !== from || q.dying || q.busy) continue;
-      const d = Math.hypot(q.x - mx, q.y - my);
-      if (d < bd) { bd = d; best = q; }
-    }
-    if (!best) return false;
-    best.busy = true;
-    this.moving.push({ p, ion, dir, t: 0, dur: 1.4, part: best, x0: best.x, y0: best.y, da, rim: false, delay });
+    const reach = 80 * g.k;
+    return this.parts
+      .filter((q) => q.ion === ion && q.where === from && !q.dying && !q.busy)
+      .map((q) => ({ q, d: Math.hypot(q.x - mx, q.y - my) }))
+      .filter((c) => c.d < reach)
+      .sort((x, y) => x.d - y.d);
+  }
+  /**
+   * Move one real dot through pathway p (dir +1 out, −1 in). Only a dot already near the pore can
+   * go: it walks over at a dot's pace, passes through, and is let go just past the pore. Returns
+   * false when no dot is close enough; the caller keeps the event and tries again.
+   */
+  transfer(p: number, ion: Species, dir: number, delay = 0, da = 0) {
+    const c = this.nearby(p, ion, dir)[0];
+    if (!c) return false;
+    c.q.busy = true;
+    const walk = Math.max(0.35, c.d / 30); // seconds to reach the pore at ~30 px/s
+    this.moving.push({ p, ion, dir, t: 0, dur: walk + 0.9, walk, part: c.q, x0: c.q.x, y0: c.q.y, da, rim: false, delay });
     return true;
   }
   /** A crossing drawn at the membrane-charge scale; it joins the rim. */
   rimCrossing(p: number, ion: Species, dir: number) {
-    if (this.moving.length > 160) return;
+    if (this.moving.length > 160) return false;
     this.moving.push({ p, ion, dir, t: 0, dur: 0.9, x0: 0, y0: 0, da: (Math.random() - 0.5) * 0.1, rim: true, delay: 0 });
+    return true;
   }
   /** Accumulate a rate (events per real second) and fire whole events. */
-  private every(key: string, rate: number, dt: number, fire: () => void, cap = 40) {
-    let a = (this.acc.get(key) ?? 0) + Math.min(rate, cap) * dt;
-    while (a >= 1) { a -= 1; fire(); }
+  private every(key: string, rate: number, dt: number, fire: () => boolean, cap = 40) {
+    let a = Math.min(3, (this.acc.get(key) ?? 0) + Math.min(rate, cap) * dt); // at most 3 events wait for a dot
+    while (a >= 1) { if (!fire()) break; a -= 1; }
     this.acc.set(key, a);
   }
   /** One-way bulk crossings: efflux and influx in dots per real second. */
@@ -522,7 +532,14 @@ export class CellStage {
   /** Cycles of a pump or cotransporter: every member crosses together. */
   flowGroup(p: number, members: { ion: Species; dir: number }[], cycles: number, dt: number) {
     const sgn = Math.sign(cycles);
-    this.every(`${p}g`, Math.abs(cycles), dt, () => members.forEach((m, i) => this.transfer(p, m.ion, m.dir * sgn, i * 0.12, (i - (members.length - 1) / 2) * 0.06)), 12);
+    this.every(`${p}g`, Math.abs(cycles), dt, () => {
+      // a cycle runs only when every ion it carries is at hand
+      const need = new Map<string, { ion: Species; dir: number; n: number }>();
+      for (const m of members) { const k = m.ion + (m.dir * sgn); const e = need.get(k) ?? { ion: m.ion, dir: m.dir * sgn, n: 0 }; e.n++; need.set(k, e); }
+      for (const e of need.values()) if (this.nearby(p, e.ion, e.dir).length < e.n) return false;
+      members.forEach((m, i) => this.transfer(p, m.ion, m.dir * sgn, i * 0.12, (i - (members.length - 1) / 2) * 0.06));
+      return true;
+    }, 12);
   }
   /** One-way crossings at the membrane-charge scale, in crossings per real second. */
   flowRim(p: number, ion: Species, efflux: number, influx: number, dt: number) {
@@ -586,7 +603,7 @@ export class CellStage {
       if (m.delay > 0) { m.delay -= dt; continue; }
       m.t += dt / m.dur;
       if (m.t >= 1 && m.part) {
-        const q = m.part, [ex, ey] = this.mouth(m.p, g, m.dir > 0 ? g.R + 34 * g.k : g.R - 34 * g.k, m.da);
+        const q = m.part, [ex, ey] = this.mouth(m.p, g, m.dir > 0 ? g.R + 22 * g.k : g.R - 22 * g.k, m.da);
         q.x = ex; q.y = ey; q.vx = 0; q.vy = 0; q.where = m.dir > 0 ? "out" : "in"; q.busy = false;
       }
     }
@@ -603,10 +620,12 @@ export class CellStage {
       if (m.t < 0.6) { const u = ease(m.t / 0.6); return [ax + (bx - ax) * u, ay + (by - ay) * u]; }
       const u = ease((m.t - 0.6) / 0.4); return [bx + (cx - bx) * u, by + (cy - by) * u];
     }
-    const [ex, ey] = this.mouth(m.p, g, m.dir > 0 ? g.R + 34 * g.k : g.R - 34 * g.k, m.da);
-    if (m.t < 0.35) { const u = ease(m.t / 0.35); return [m.x0 + (ax - m.x0) * u, m.y0 + (ay - m.y0) * u]; }
-    if (m.t < 0.7) { const u = ease((m.t - 0.35) / 0.35); return [ax + (bx - ax) * u, ay + (by - ay) * u]; }
-    const u = ease((m.t - 0.7) / 0.3); return [bx + (ex - bx) * u, by + (ey - by) * u];
+    const [ex, ey] = this.mouth(m.p, g, m.dir > 0 ? g.R + 22 * g.k : g.R - 22 * g.k, m.da);
+    // walk to the pore at a dot's pace, through it in half a second, then a short step clear
+    const T = m.t * m.dur, w = m.walk ?? 0.35;
+    if (T < w) { const u = ease(T / w); return [m.x0 + (ax - m.x0) * u, m.y0 + (ay - m.y0) * u]; }
+    if (T < w + 0.5) { const u = ease((T - w) / 0.5); return [ax + (bx - ax) * u, ay + (by - ay) * u]; }
+    const u = ease(Math.min(1, (T - w - 0.5) / 0.4)); return [bx + (ex - bx) * u, by + (ey - by) * u];
   }
   draw() {
     const g = this.geometry();
