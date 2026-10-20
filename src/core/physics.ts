@@ -165,10 +165,16 @@ export function netCurrent(cell: Cell, V: number, ci: Conc, bath: Bath, area: nu
   return i + F * pumpRate(cell, ci, bath, area) + extraCurrent(extra);
 }
 
-/** The Vm at which net current is zero. Current rises monotonically with V, so bisection is safe. */
+/**
+ * The Vm at which net current is zero. Current rises monotonically with V, so bisection is safe.
+ * The bracket starts at ±200 mV and widens if the root lies outside it (stacked hand carries can
+ * push it there), so the answer is never a silent bound.
+ */
 export function restingV(cell: Cell, ci: Conc, bath: Bath, area: number, extra?: Extra) {
   let lo = -0.2, hi = 0.2;
-  for (let k = 0; k < 80; k++) {
+  for (let k = 0; k < 8 && netCurrent(cell, lo, ci, bath, area, extra) > 0; k++) lo *= 2;
+  for (let k = 0; k < 8 && netCurrent(cell, hi, ci, bath, area, extra) < 0; k++) hi *= 2;
+  for (let k = 0; k < 90; k++) {
     const mid = (lo + hi) / 2;
     if (netCurrent(cell, mid, ci, bath, area, extra) > 0) hi = mid; else lo = mid;
   }

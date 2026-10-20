@@ -98,6 +98,8 @@ export default function Homeostat() {
             <span className="hs-left">time left <b id="hs-left">—</b></span>
           </div>
           <p id="hs-status" className="hs-status" />
+          <p className="src">Each dot you carry is delivered over 20 s of cell time. Carrying charge moves Vm: carry a Na⁺ out alone and Vm jumps
+            negative, then the leaks pay the charge back.</p>
         </div>
         <div className="panel"><h3>Voltage ruler</h3><canvas id="ruler" /></div>
       </div>

@@ -161,3 +161,15 @@ test("A hand that moves 3 Na⁺ out for 2 K⁺ in at the pump's rate is the pump
   close(s.net.Na, s0.net.Na, 1e-9 * s0.pump, "Na⁺ as steady as with the pump");
   close(s.net.K, s0.net.K, 1e-9 * s0.pump, "K⁺ as steady as with the pump");
 });
+
+test("Stacked hand carries past ±200 mV still give the true zero-current Vm, not the bound", () => {
+  const h = I.healthyState();
+  const { area } = I.sphere(h.cell.radius);
+  const s = I.snapshot(h.cell, h.n);
+  const dot = 1.7e-14 / 20; // one dot's moles over the homeostat's 20 s delivery, mol/s
+  for (const extra of [{ Na: 20 * dot }, { K: -20 * dot }]) {
+    const V = I.restingV(h.cell, s.ci, I.BATH, area, extra);
+    if (extra.Na) assert.ok(V < -0.2, `Na⁺ carried out goes beyond the old bracket: ${V}`); // K⁺ in saturates near +55 mV
+    close(I.netCurrent(h.cell, V, s.ci, I.BATH, area, extra), 0, 1e-15, "zero net current");
+  }
+});
