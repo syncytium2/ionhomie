@@ -32,6 +32,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | The healthy cell is an exact pump–leak steady state at the lecture's Na⁺ 10, K⁺ 140 mM, Ca²⁺ 0.1 µM: Vm −80.3 mV, passive Cl⁻ 5.2 mM, pump current 11.1 pA | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | Blocking the pump moves Vm at once by 2.6 mV (to −77.8 mV): its direct electrogenic share in this cell | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | With no pump, after 30 minutes: Na⁺ 114 mM, K⁺ 36 mM, Vm −45 mV, volume 1.09× | `measured` | `src/core/physics.test.ts` | `98282a8` |
+| Deployed v0.1.2, the review round, to https://ionhomie.tonydefazio.com (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
 | Deployed v0.1.1 to https://ionhomie.tonydefazio.com and https://ionhomie.tonydefazio.workers.dev (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | `c7c4555` |
 | Tony's review round built: two stated scales, one-way crossings, the charged rim, the nav bar, the balance, sampled playback | `built` | [ADR-0011](adr/0011-every-dot-and-crossing-is-on-a-stated-scale.md), [0012](adr/0012-a-nav-bar-on-every-page.md), [0013](adr/0013-a-balance-beside-the-ruler.md); `npm run check` | `62da620` |
 | KCC2 at 2.48 × 10⁻¹⁶ brings E_Cl to −85 mV; NKCC1 at 2.86 × 10⁻¹⁶ brings it to −36.5 mV and Vm to −59.9 mV | `measured` | `src/core/physics.test.ts` | `98282a8` |
@@ -44,5 +45,4 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | **Rule on the particles-depict-the-physics decision** ([ADR-0004](adr/0004-the-physics-computes-the-particles-depict.md), proposed) | **Tony** | nothing now; it is how the app is built |
 | **Play through the GHK, rundown and pump chapters in order** and confirm or overturn the chapter arc | **Tony** | settling the arc |
 | **Find and verify the reference numbers not in the lectures**: free-solution diffusion coefficients (K⁺ 1.96, Na⁺ 1.33, Cl⁻ 2.03, Ca²⁺ 0.79 × 10⁻⁹ m²/s); the squid preset and Hodgkin & Katz's (1949) ratio; Na⁺/K⁺-ATPase and PMCA activation constants; a published pump–leak model to check the rundown against. Each goes into `lit/sources.json` | Claude | calling those numbers sourced |
-| **Look at the review round** (ADR-0011 to 0013), built and checked but **not deployed**: the live site is still v0.1.1 | **Tony** | `npm run deploy` |
 | **A card on tonydefazio.com** for ionhomie, once deployed | Tony | the estate's router |

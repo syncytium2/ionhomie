@@ -1,6 +1,6 @@
 # Tony's walkthrough of v0.1.1, 2026-10-20
 
-**Status: built, 2026-10-20, not yet deployed.** Tony reviewed home, diffusion, drift, compartments and one
+**Status: built and deployed (v0.1.2), 2026-10-20.** Tony reviewed home, diffusion, drift, compartments and one
 channel, then: *"i need to stop here, but you can extrapolate to the remaining tabs based on this feedback.
 students are very visual and get thrown off by mismatches."* Where each item went:
 [ADR-0011](../adr/0011-every-dot-and-crossing-is-on-a-stated-scale.md) (scales, crossings, motion),
