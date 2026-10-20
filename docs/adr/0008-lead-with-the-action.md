@@ -2,6 +2,9 @@
 
 ## Status
 
+*The single title row is superseded by [ADR-0012](0012-a-nav-bar-on-every-page.md)'s nav bar, 2026-10-20; the
+rest of this decision stands.*
+
 Accepted, 2026-10-20, by Tony: "i prefer to lead with the image/movie/action. only the title and
 nav at the top. all the legend, controls, explanation, text goes below" and "put the born on date
 and the current version and date next to the title". Tony calls the first "a continuous battle":

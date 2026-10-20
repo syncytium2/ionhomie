@@ -1,5 +1,5 @@
 import * as I from "../core/physics.ts";
-import { $, CellStage, LABEL, Trace, Z, fmtMv, ledger, loop, minus, ruler, setText } from "../views/draw.ts";
+import { $, CellStage, IONS_PER_SIGN, LABEL, Trace, Z, balance, cssVar, color, fmtMv, ledger, loop, minus, ruler, setText } from "../views/draw.ts";
 import { Below, ModelNote, Readout, useEngine } from "./parts.tsx";
 
 type Mono = "K" | "Na" | "Cl";
@@ -37,9 +37,21 @@ function engine() {
     t += d;
     const pp = P();
     const I_ = I.ghkCurrent(pp[ion]!, Z[ion], V, ci[ion], co[ion]) * area; // A, outward +
-    const iMax = Math.abs(I.ghkCurrent(P1 * 10, Z[ion], 0, ci[ion], co[ion]) * area) || 1;
-    stage.flow([{ [ion]: Math.sign(I_) * Z[ion] * Math.min(40, 220 * Math.sqrt(Math.abs(I_) / iMax)) }], dt);
+    // crossings at the membrane-charge scale: each one is IONS_PER_SIGN ions, and they join the rim
+    if (open) {
+      const u = I.ghkUnidirectional(pp[ion]!, Z[ion], V, ci[ion], co[ion]);
+      const k = (area * 6.02214076e23 * simPerReal) / IONS_PER_SIGN;
+      stage.flowRim(0, ion, u.efflux * k, u.influx * k, dt);
+    }
+    stage.setV(mv(V));
     stage.step(dt); stage.draw();
+    const dv = mv(V - E[ion]), out = dv * Z[ion] > 0;
+    balance($<HTMLCanvasElement>("balance"), {
+      leftTitle: `the gradient: worth E = ${fmtMv(mv(E[ion]), 0)}`, rightTitle: `the membrane: Vm = ${fmtMv(mv(V), 0)}`,
+      left: [{ label: "E", value: Math.abs(mv(E[ion])), color: color(ion) }], right: [{ label: "Vm", value: Math.abs(mv(V)), color: cssVar("--accent") }],
+      tilt: -dv / 45,
+      caption: !open ? "channel closed: nothing can flow" : Math.abs(dv) < 1 ? `balanced at E: no net ${LABEL[ion]} flux` : `${LABEL[ion]} flows ${out ? "out" : "in"}: Vm is ${Math.abs(dv).toFixed(0)} mV from E`,
+    });
     acc += dt;
     if (acc > 0.02) { acc = 0; trace.push(t, { v: mv(V) }); }
     trace.draw();
@@ -70,7 +82,10 @@ export default function OneChannel() {
             <button id="zero">Discharge to 0 mV</button>
           </div>
         </div>
-        <div className="panel"><h3>Voltage ruler</h3><canvas id="ruler" /></div>
+        <div className="stack">
+          <div className="panel"><h3>Voltage ruler</h3><canvas id="ruler" /></div>
+          <div className="panel"><h3>The balance</h3><canvas id="balance" /></div>
+        </div>
       </div>
       <div className="grid">
         <div className="panel">
@@ -101,7 +116,11 @@ export default function OneChannel() {
         <div className="predict"><b>Predict.</b> Open a K⁺ channel. Which way does Vm go, and where does it stop? Then close the channel.
           Does Vm fall back to zero?</div>
         <ul className="notice">
-          <li><b>Vm runs to E for that ion, and stops.</b> At E the ion's flux is zero: the reversal potential.</li>
+          <li><b>Every crossing becomes membrane charge.</b> The rings that pass through the channel are drawn at the membrane's scale (each about
+            110,000 ions) and join the ± rim; none of them joins the dots in the cell, because each dot is billions of ions and the whole charge
+            is a few millionths of the cell's K⁺.</li>
+          <li><b>Vm runs to E for that ion, and stops.</b> At E the ion still crosses, but equally both ways: no net flux, the reversal potential.
+            The balance is level.</li>
           <li><b>Closing the channel does not bring Vm back.</b> Nothing else conducts, so nothing discharges the membrane. A real
             membrane always has some leak; leaks are the next chapter.</li>
           <li><b>The concentrations are held fixed here, and the ledger says why that is fair</b>: the ions that charged the membrane are

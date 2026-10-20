@@ -1,8 +1,11 @@
 # Tony's walkthrough of v0.1.1, 2026-10-20
 
-**Status: on hold.** Tony: *"hold on these until i comment on each lesson."* Nothing below is
-built yet. Notes are added here as each lesson is reviewed; when work starts, each item becomes
-an ADR or a MILESTONES row and is marked here with where it went.
+**Status: built, 2026-10-20, not yet deployed.** Tony reviewed home, diffusion, drift, compartments and one
+channel, then: *"i need to stop here, but you can extrapolate to the remaining tabs based on this feedback.
+students are very visual and get thrown off by mismatches."* Where each item went:
+[ADR-0011](../adr/0011-every-dot-and-crossing-is-on-a-stated-scale.md) (scales, crossings, motion),
+[ADR-0012](../adr/0012-a-nav-bar-on-every-page.md) (nav bar),
+[ADR-0013](../adr/0013-a-balance-beside-the-ruler.md) (ruler and balance). The notes below are kept as written.
 
 ## Home page
 
@@ -76,3 +79,15 @@ Tony's words, from a screenshot of the home page's cell:
 |---|---|
 | The torrent is not honest | Charging to −85 mV moves ~6.6 million K⁺, ~1 in 53,000 of the cell's K⁺. At the bulk dot scale (~10¹⁰ ions per dot) that is under a thousandth of one dot: nothing should visibly enter the bath. The stream is a visual flux scale unconnected to the dots, the same defect as on the home page. |
 | Proposed (held): crossings feed the charged rim | The K⁺ that cross do not join the bath's dots; they line up as the + layer on the membrane's outer face, at the rim's labeled magnification (~10⁵×, see Compartments), leaving the − layer inside. Opening the channel builds the rim while every bulk dot stays put; at E_K the net stream stops and a few ions flicker through both ways, equally. Two scales, each labeled and each consistent with the physics: dots for the bulk, rim and crossings for the membrane charge. The ledger's arithmetic becomes the caption. Resolves the home page's torrent the same way. |
+
+## The remaining tabs, extrapolated (Claude, from the notes above)
+
+The rule taken from the review: **nothing on the screen may contradict anything else on it.**
+
+| tab | what that meant |
+|---|---|
+| Two ions and GHK | Rim-scale rings in both directions through each channel: K⁺ out faster than in, Na⁺ in faster than out, Cl⁻ (at its reversal potential in the lecture's example) equal both ways. The ± rim. A balance of outward against inward current, level with both pans loaded. |
+| Rundown | Real dots cross at true one-way rates, so the Na⁺ dots that enter are the ones that pile up and the cell visibly fills and swells. The dead pump does not turn. |
+| Pumps | The pump moves 3 Na⁺ out and 2 K⁺ in per cycle as one group; ouabain stops the rotor and the groups. Ca²⁺ is not drawn (0.1 µM is a few thousandths of a dot), and the note says so. |
+| Chloride | NKCC1 moves 1 Na⁺, 1 K⁺, 2 Cl⁻ in together; KCC2 1 K⁺, 1 Cl⁻ out together. At 30 minutes per second the true rates are thinned to 1 in *k*, both ways alike, and the stage says so. |
+| Every compartment stage | Both scales printed on the stage; bigger membrane proteins; calm motion. |

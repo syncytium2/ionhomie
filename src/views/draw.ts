@@ -59,8 +59,9 @@ export function loop(fn: (dt: number) => void) {
   let last = performance.now(), id = 0, live = true;
   const tick = (now: number) => {
     if (!live) return;
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
+    // a frame's timestamp can predate the loop's start, so the first step can come out negative
+    const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+    last = Math.max(last, now);
     fn(dt);
     id = requestAnimationFrame(tick);
   };
@@ -135,19 +136,31 @@ export function ruler(canvas: HTMLCanvasElement, st: RulerState) {
   const H = st.height || 420;
   const { ctx, w } = fit(canvas, H);
   const min = st.min ?? -110, max = st.max ?? 80;
-  const top = 18, bot = H - 18;
+  const top = 30, bot = H - 30;
   const y = (mv: number) => bot - ((Math.max(min, Math.min(max, mv)) - min) / (max - min)) * (bot - top);
-  const ax = 44;
-  ctx.strokeStyle = cssVar("--line"); ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(ax, top); ctx.lineTo(ax, bot); ctx.stroke();
-  ctx.font = "11px ui-monospace, Menlo, monospace"; ctx.fillStyle = cssVar("--muted"); ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  const ax = 48;
+  // inside positive above zero, inside negative below: shaded, and said in words
+  ctx.fillStyle = "rgba(255,138,101,0.07)"; ctx.fillRect(ax, top, w - ax - 4, y(0) - top);
+  ctx.fillStyle = "rgba(86,180,233,0.07)"; ctx.fillRect(ax, y(0), w - ax - 4, bot - y(0));
+  ctx.font = "11px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+  ctx.fillStyle = "rgba(255,180,162,0.9)"; ctx.fillText("↑ inside positive", ax, top - 6);
+  ctx.textBaseline = "top"; ctx.fillStyle = "rgba(154,209,255,0.9)"; ctx.fillText("↓ inside negative", ax, bot + 6);
   const stepMv = max - min > 150 ? 40 : 20;
+  ctx.strokeStyle = "rgba(154,165,177,0.18)"; ctx.lineWidth = 1;
+  for (let v = Math.ceil(min / 20) * 20; v <= max; v += 20) { if (v === 0) continue; ctx.beginPath(); ctx.moveTo(ax, y(v)); ctx.lineTo(w - 4, y(v)); ctx.stroke(); }
+  ctx.strokeStyle = cssVar("--muted"); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(ax, top); ctx.lineTo(ax, bot); ctx.stroke();
+  ctx.font = "12px ui-monospace, Menlo, monospace"; ctx.fillStyle = cssVar("--text"); ctx.textAlign = "right"; ctx.textBaseline = "middle";
   for (let v = Math.ceil(min / stepMv) * stepMv; v <= max; v += stepMv) {
-    ctx.fillText(minus(String(v)), ax - 6, y(v));
-    ctx.beginPath(); ctx.moveTo(ax - 3, y(v)); ctx.lineTo(ax, y(v)); ctx.stroke();
+    if (v === 0) continue;
+    ctx.fillText(minus(String(v)), ax - 7, y(v));
+    ctx.beginPath(); ctx.moveTo(ax - 5, y(v)); ctx.lineTo(ax, y(v)); ctx.stroke();
   }
-  ctx.save(); ctx.translate(10, (top + bot) / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center"; ctx.fillText("mV", 0, 0); ctx.restore();
-  ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(ax, y(0)); ctx.lineTo(w - 6, y(0)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.save(); ctx.translate(11, (top + bot) / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center"; ctx.fillStyle = cssVar("--muted"); ctx.font = "11px system-ui, sans-serif"; ctx.fillText("Vm, inside relative to outside (mV)", 0, 0); ctx.restore();
+  // the zero line: where the membrane carries no charge
+  ctx.strokeStyle = "#e6edf3"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(ax - 6, y(0)); ctx.lineTo(w - 4, y(0)); ctx.stroke();
+  ctx.font = "700 13px ui-monospace, Menlo, monospace"; ctx.fillStyle = "#ffffff"; ctx.textAlign = "right"; ctx.fillText("0", ax - 8, y(0));
 
   const ions = Object.keys(st.E) as Species[];
   const colW = Math.min(26, (w - ax - 150) / Math.max(1, ions.length));
@@ -348,151 +361,332 @@ export class Trace {
   }
 }
 
+// ---------- the balance (a teeter-totter) ----------
+export interface Weight { label: string; value: number; color: string }
+/**
+ * A beam on a pivot. Weights on each side are drawn as blocks sized by value; the beam tilts by
+ * `tilt` (−1 … 1, left side down when negative) and is level at 0. The caller decides what the
+ * two sides mean; the view only draws them.
+ */
+export function balance(canvas: HTMLCanvasElement, st: { left: Weight[]; right: Weight[]; leftTitle: string; rightTitle: string; tilt: number; caption: string; height?: number }) {
+  const H = st.height || 200;
+  const { ctx, w } = fit(canvas, H);
+  const cx = w / 2, py = H - 58, half = Math.min(w * 0.42, 220);
+  const ang = Math.max(-1, Math.min(1, st.tilt)) * 0.28;
+  // pivot
+  ctx.fillStyle = cssVar("--muted");
+  ctx.beginPath(); ctx.moveTo(cx, py); ctx.lineTo(cx - 16, py + 26); ctx.lineTo(cx + 16, py + 26); ctx.closePath(); ctx.fill();
+  ctx.save(); ctx.translate(cx, py); ctx.rotate(ang);
+  ctx.fillStyle = Math.abs(st.tilt) < 0.03 ? cssVar("--accent") : "#e6edf3";
+  ctx.fillRect(-half, -4, 2 * half, 6);
+  const maxV = Math.max(1e-30, ...st.left.map((x) => Math.abs(x.value)), ...st.right.map((x) => Math.abs(x.value)));
+  const stack = (ws: Weight[], side: number) => {
+    let yy = -4;
+    for (const wt of ws) {
+      const hgt = 6 + 40 * (Math.abs(wt.value) / maxV), wd = 54;
+      const x0 = side * (half - 12) - wd / 2;
+      ctx.fillStyle = wt.color; ctx.globalAlpha = 0.9; ctx.fillRect(x0, yy - hgt, wd, hgt); ctx.globalAlpha = 1;
+      ctx.fillStyle = "#0d1117"; ctx.font = "600 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      if (hgt > 14) ctx.fillText(wt.label, side * (half - 12), yy - hgt / 2);
+      yy -= hgt + 2;
+    }
+  };
+  stack(st.left, -1); stack(st.right, 1);
+  ctx.restore();
+  const lines = (t: string) => { const i = t.indexOf(":"); return i < 0 ? [t] : [t.slice(0, i), t.slice(i + 1).trim()]; };
+  ctx.fillStyle = cssVar("--text"); ctx.textBaseline = "top";
+  lines(st.leftTitle).forEach((t, i) => { ctx.font = i ? "600 12px ui-monospace, Menlo, monospace" : "11px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.fillText(t, 6, 6 + i * 15); });
+  lines(st.rightTitle).forEach((t, i) => { ctx.font = i ? "600 12px ui-monospace, Menlo, monospace" : "11px system-ui, sans-serif"; ctx.textAlign = "right"; ctx.fillText(t, w - 6, 6 + i * 15); });
+  ctx.textAlign = "center"; ctx.fillStyle = Math.abs(st.tilt) < 0.03 ? cssVar("--accent") : cssVar("--muted"); ctx.font = "600 12px system-ui, sans-serif";
+  ctx.fillText(st.caption, cx, H - 22);
+}
+
 // ---------- the cell stage ----------
+//
+// Two scales, each stated on the stage, and they agree (docs/adr/0011):
+//  · bulk: every dot stands for `ionsPerDot` ions (~10¹⁰). In "amounts" mode the inside counts come
+//    from the cell's real amounts, and only crossings change them: a crossing moves an actual dot
+//    through the pathway, at the model's one-way rate × the clock speed. The bath is a reservoir and
+//    is kept at its concentration.
+//  · membrane charge: a rim of + and − along the membrane, `IONS_PER_SIGN` ions per sign, set by Vm.
+//    In the fast chapters, crossings are drawn at this scale and join the rim.
+// Motion between crossings is depiction only: a slow, smooth wander, not the model's diffusion.
+
+export const DOT_DENSITY = 0.0062; // dots per mM per 1000 px², inside and out
+export const IONS_PER_SIGN = 1.1e5; // ions of membrane charge per drawn rim sign
+const NA = 6.02214076e23;
+
 export interface Pathway {
   kind: "channel" | "pump" | "pmca" | "nkcc1" | "kcc2";
   angle: number; ions?: Species[]; open?: boolean; on?: boolean; label?: string; key?: string;
-  phase?: number; acc?: Record<string, number>;
+  phase?: number;
 }
 type Where = "in" | "out";
-interface Particle { ion: Species; where: Where; x: number; y: number; a: number; dying: boolean }
-interface Token { p: number; ion: Species; dir: number; s: number; jitter: number }
-export interface StageOpts { height: number; density: number; ions: Species[]; caBoost: number; maxPer: number }
+interface Particle { ion: Species; where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; busy: boolean }
+interface Crossing { p: number; ion: Species; dir: number; t: number; dur: number; part?: Particle; x0: number; y0: number; da: number; rim: boolean; delay: number }
+export interface StageOpts { height: number; ions: Species[]; mode: "fixed" | "amounts"; cellVolume: number }
 
-/**
- * A 2D slice: bath around a cell. Particle density follows the concentrations it is handed (a view
- * of the model, not the model). Pathways sit on the membrane; moving tokens show the direction and
- * relative size of each flux, not its true number.
- */
 export class CellStage {
   o: StageOpts;
   parts: Particle[] = [];
-  tokens: Token[] = [];
+  moving: Crossing[] = [];
   pathways: Pathway[] = [];
   inside: Partial<Record<Species, number>> = {};
   outside: Partial<Record<Species, number>> = {};
+  amounts: Partial<Record<Species, number>> = {}; // ions, for "amounts" mode
   volumeRel = 1;
-  private warned = false;
+  V: number | null = null; // mV, for the rim
+  thinning = 1; // crossings shown are 1 in this many (the lab sets it at fast clocks)
+  private acc = new Map<string, number>();
+  private lastW = 0;
   constructor(private c: HTMLCanvasElement, opts: Partial<StageOpts> = {}) {
-    this.o = { height: 420, density: 0.0062, ions: ["Na", "K", "Cl", "A"], caBoost: 0, maxPer: 900, ...opts };
+    this.o = { height: 420, ions: ["Na", "K", "Cl", "A"], mode: "fixed", cellVolume: (4 / 3) * Math.PI * 1e-15, ...opts };
   }
   geometry() {
     const w = Math.max(50, this.c.clientWidth), h = this.o.height;
     const R0 = Math.min(w, h) * 0.34;
-    const R = R0 * Math.cbrt(Math.max(0.2, this.volumeRel));
-    return { w, h, cx: w / 2, cy: h / 2, R: Math.min(R, Math.min(w, h) * 0.47), R0 };
+    const R = Math.min(R0 * Math.cbrt(Math.max(0.2, this.volumeRel)), Math.min(w, h) * 0.47);
+    return { w, h, cx: w / 2, cy: h / 2, R, R0, k: Math.max(1, Math.min(1.7, R0 / 105)) };
+  }
+  /** Ions each bulk dot stands for, at this canvas size. */
+  ionsPerDot() {
+    const g = this.geometry();
+    return (this.o.cellVolume * NA * 1000) / (Math.PI * g.R0 * g.R0 * DOT_DENSITY);
   }
   setConcentrations(inside: Partial<Record<Species, number>>, outside: Partial<Record<Species, number>>, volumeRel = 1) {
     this.inside = inside; this.outside = outside; this.volumeRel = volumeRel;
   }
-  private target(ion: Species, where: Where, g: ReturnType<CellStage["geometry"]>) {
-    let c = (where === "in" ? this.inside : this.outside)[ion];
-    if (c === undefined) return 0;
-    if (ion === "Ca" && this.o.caBoost) c *= this.o.caBoost;
-    const area = where === "in" ? Math.PI * g.R * g.R : g.w * g.h - Math.PI * g.R * g.R;
-    const n = Math.round((c * area * this.o.density) / 1000);
-    if (n > this.o.maxPer && !this.warned) { this.warned = true; console.warn(`CellStage: ${ion} ${where} wants ${n} particles, capped at ${this.o.maxPer}; densities no longer comparable`); }
-    return Math.min(this.o.maxPer, n);
-  }
-  private spawn(ion: Species, where: Where, g: ReturnType<CellStage["geometry"]>) {
-    for (let k = 0; k < 40; k++) {
-      const x = Math.random() * g.w, y = Math.random() * g.h;
-      const d = Math.hypot(x - g.cx, y - g.cy);
-      if (where === "in" ? d < g.R - 8 : d > g.R + 8 && x > 6 && x < g.w - 6 && y > 6 && y < g.h - 6) {
-        this.parts.push({ ion, where, x, y, a: 0, dying: false });
-        return;
-      }
-    }
-  }
+  /** "amounts" mode: the cell's ions of each species (not moles). */
+  setAmounts(ions: Partial<Record<Species, number>>) { this.amounts = ions; }
   setPathways(list: Pathway[]) { this.pathways = list; }
-  private emit(p: number, ion: Species, dir: number) {
-    if (this.tokens.length > 120) return;
-    this.tokens.push({ p, ion, dir, s: 0, jitter: (Math.random() - 0.5) * 0.08 });
+  setV(mv: number | null) { this.V = mv; }
+
+  private target(ion: Species, where: Where, g: ReturnType<CellStage["geometry"]>) {
+    if (where === "in" && this.o.mode === "amounts") {
+      const n = this.amounts[ion];
+      return n === undefined ? 0 : Math.round(n / this.ionsPerDot());
+    }
+    const c = (where === "in" ? this.inside : this.outside)[ion];
+    if (c === undefined) return 0;
+    const area = where === "in" ? Math.PI * g.R * g.R : g.w * g.h - Math.PI * g.R * g.R;
+    return Math.round((c * area * DOT_DENSITY) / 1000);
   }
-  /** rates: per pathway, {ion: tokens per second, signed (+ outward)}. Accumulates and emits. */
-  flow(rates: (Partial<Record<Species, number>> | null)[], dt: number) {
-    rates.forEach((r, p) => {
-      const pw = this.pathways[p];
-      if (!r || !pw) return;
-      pw.acc = pw.acc || {};
-      for (const ion of Object.keys(r) as Species[]) {
-        pw.acc[ion] = (pw.acc[ion] || 0) + Math.abs(r[ion]!) * dt;
-        while (pw.acc[ion] >= 1) { pw.acc[ion] -= 1; this.emit(p, ion, Math.sign(r[ion]!)); }
-      }
-    });
+  private place(where: Where, g: ReturnType<CellStage["geometry"]>, edge = false): [number, number] | null {
+    for (let k = 0; k < 60; k++) {
+      let x = Math.random() * g.w, y = Math.random() * g.h;
+      if (edge) { if (Math.random() < 0.5) x = Math.random() < 0.5 ? 8 + Math.random() * 20 : g.w - 8 - Math.random() * 20; else y = Math.random() < 0.5 ? 8 + Math.random() * 20 : g.h - 8 - Math.random() * 20; }
+      const d = Math.hypot(x - g.cx, y - g.cy);
+      if (where === "in" ? d < g.R - 10 : d > g.R + 12 && x > 6 && x < g.w - 6 && y > 6 && y < g.h - 6) return [x, y];
+    }
+    return null;
   }
+  private spawn(ion: Species, where: Where, g: ReturnType<CellStage["geometry"]>, edge = false) {
+    const at = this.place(where, g, edge);
+    if (at) this.parts.push({ ion, where, x: at[0], y: at[1], vx: 0, vy: 0, a: 0, dying: false, busy: false });
+  }
+  private mouth(p: number, g: ReturnType<CellStage["geometry"]>, r: number, da = 0) {
+    const a = this.pathways[p].angle + da;
+    return [g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r];
+  }
+  /** Move one real dot through pathway p (dir +1 out, −1 in). Returns false if none was on the source side. */
+  transfer(p: number, ion: Species, dir: number, delay = 0, da = 0) {
+    const g = this.geometry(), from: Where = dir > 0 ? "in" : "out";
+    const [mx, my] = this.mouth(p, g, dir > 0 ? g.R - 16 * g.k : g.R + 16 * g.k);
+    let best: Particle | undefined, bd = Infinity;
+    for (const q of this.parts) {
+      if (q.ion !== ion || q.where !== from || q.dying || q.busy) continue;
+      const d = Math.hypot(q.x - mx, q.y - my);
+      if (d < bd) { bd = d; best = q; }
+    }
+    if (!best) return false;
+    best.busy = true;
+    this.moving.push({ p, ion, dir, t: 0, dur: 1.4, part: best, x0: best.x, y0: best.y, da, rim: false, delay });
+    return true;
+  }
+  /** A crossing drawn at the membrane-charge scale; it joins the rim. */
+  rimCrossing(p: number, ion: Species, dir: number) {
+    if (this.moving.length > 160) return;
+    this.moving.push({ p, ion, dir, t: 0, dur: 0.9, x0: 0, y0: 0, da: (Math.random() - 0.5) * 0.1, rim: true, delay: 0 });
+  }
+  /** Accumulate a rate (events per real second) and fire whole events. */
+  private every(key: string, rate: number, dt: number, fire: () => void, cap = 40) {
+    let a = (this.acc.get(key) ?? 0) + Math.min(rate, cap) * dt;
+    while (a >= 1) { a -= 1; fire(); }
+    this.acc.set(key, a);
+  }
+  /** One-way bulk crossings: efflux and influx in dots per real second. */
+  flowBulk(p: number, ion: Species, efflux: number, influx: number, dt: number) {
+    this.every(`${p}${ion}o`, efflux, dt, () => this.transfer(p, ion, +1, 0, (Math.random() - 0.5) * 0.08));
+    this.every(`${p}${ion}i`, influx, dt, () => this.transfer(p, ion, -1, 0, (Math.random() - 0.5) * 0.08));
+  }
+  /** Cycles of a pump or cotransporter: every member crosses together. */
+  flowGroup(p: number, members: { ion: Species; dir: number }[], cycles: number, dt: number) {
+    const sgn = Math.sign(cycles);
+    this.every(`${p}g`, Math.abs(cycles), dt, () => members.forEach((m, i) => this.transfer(p, m.ion, m.dir * sgn, i * 0.12, (i - (members.length - 1) / 2) * 0.06)), 12);
+  }
+  /** One-way crossings at the membrane-charge scale, in crossings per real second. */
+  flowRim(p: number, ion: Species, efflux: number, influx: number, dt: number) {
+    this.every(`${p}${ion}ro`, efflux, dt, () => this.rimCrossing(p, ion, +1), 16);
+    this.every(`${p}${ion}ri`, influx, dt, () => this.rimCrossing(p, ion, -1), 16);
+  }
+
   step(dt: number) {
+    if (!(dt > 0)) return;
     const g = this.geometry();
+    if (Math.abs(g.w - this.lastW) > 2) { // a resize changes the dot scale: start the counts over
+      if (this.lastW) this.parts = [];
+      this.lastW = g.w;
+    }
     for (const where of ["in", "out"] as const) {
       for (const ion of this.o.ions) {
-        const live = this.parts.filter((q) => q.ion === ion && q.where === where && !q.dying);
+        const live = this.parts.filter((q) => q.ion === ion && q.where === where && !q.dying && !q.busy);
         const diff = this.target(ion, where, g) - live.length;
-        const n = Math.min(Math.abs(diff), Math.max(1, Math.round(Math.abs(diff) * 0.08)));
-        if (diff > 0) for (let i = 0; i < n; i++) this.spawn(ion, where, g);
-        else if (diff < 0) for (let i = 0; i < n; i++) live[(Math.random() * live.length) | 0].dying = true;
+        // "amounts" inside: only crossings change counts; correct rounding drift of 2 or more, slowly
+        const tol = where === "in" && this.o.mode === "amounts" && live.length > 0 ? 1 : 0;
+        if (Math.abs(diff) <= tol) continue;
+        const fresh = live.length === 0;
+        const n = fresh ? Math.abs(diff) : Math.min(Math.abs(diff) - tol, Math.max(1, Math.round(Math.abs(diff) * 0.08)));
+        const bulk = fresh || Math.abs(diff) > 3;
+        const leak = this.pathways.findIndex((pw) => pw.kind === "channel" && pw.ions?.length === 1 && pw.ions[0] === ion);
+        if (where === "in" && this.o.mode === "amounts" && !fresh && leak >= 0) {
+          // a correction is a visible crossing through the ion's own leak, never a dot from nowhere
+          for (let i = 0; i < n; i++) this.transfer(leak, ion, diff > 0 ? -1 : +1);
+          continue;
+        }
+        if (diff > 0) for (let i = 0; i < n; i++) this.spawn(ion, where, g, where === "out" && !bulk);
+        else for (let i = 0; i < n; i++) {
+          // the bath gives up dots far from the cell, where nobody is looking
+          let pick = live[(Math.random() * live.length) | 0];
+          if (where === "out") pick = live.reduce((a, b) => (Math.hypot(b.x - g.cx, b.y - g.cy) > Math.hypot(a.x - g.cx, a.y - g.cy) ? b : a), pick);
+          pick.dying = true; live.splice(live.indexOf(pick), 1);
+        }
       }
     }
-    const sig = 26 * Math.sqrt(dt);
+    // a slow, smooth wander (depiction only)
+    const tau = 1.2, sig = 9;
     for (const q of this.parts) {
+      if (q.busy) continue;
       const big = q.ion === "A" ? 0.35 : 1;
-      q.x += gauss() * sig * big; q.y += gauss() * sig * big;
+      q.vx += (-q.vx / tau) * dt + sig * big * Math.sqrt(dt) * gauss();
+      q.vy += (-q.vy / tau) * dt + sig * big * Math.sqrt(dt) * gauss();
+      q.x += q.vx * dt; q.y += q.vy * dt;
       const d = Math.hypot(q.x - g.cx, q.y - g.cy) || 1;
-      if (q.where === "in" && d > g.R - 8) { const k = (g.R - 8) / d; q.x = g.cx + (q.x - g.cx) * k; q.y = g.cy + (q.y - g.cy) * k; }
+      if (q.where === "in" && d > g.R - 10) { const k = (g.R - 10) / d; q.x = g.cx + (q.x - g.cx) * k; q.y = g.cy + (q.y - g.cy) * k; q.vx *= -0.5; q.vy *= -0.5; }
       if (q.where === "out") {
-        if (d < g.R + 8) { const k = (g.R + 8) / d; q.x = g.cx + (q.x - g.cx) * k; q.y = g.cy + (q.y - g.cy) * k; }
+        if (d < g.R + 12) { const k = (g.R + 12) / d; q.x = g.cx + (q.x - g.cx) * k; q.y = g.cy + (q.y - g.cy) * k; q.vx *= -0.5; q.vy *= -0.5; }
+        if (q.x < 6 || q.x > g.w - 6) q.vx *= -1;
+        if (q.y < 6 || q.y > g.h - 6) q.vy *= -1;
         q.x = Math.max(6, Math.min(g.w - 6, q.x)); q.y = Math.max(6, Math.min(g.h - 6, q.y));
       }
-      q.a = q.dying ? q.a - dt * 2 : Math.min(1, q.a + dt * 2);
+      q.a = q.dying ? q.a - dt * 1.5 : Math.min(1, q.a + dt * 1.5);
     }
     this.parts = this.parts.filter((q) => !(q.dying && q.a <= 0));
-    for (const tk of this.tokens) tk.s += dt / 0.9;
-    this.tokens = this.tokens.filter((tk) => tk.s < 1);
+    // crossings in flight
+    for (const m of this.moving) {
+      if (m.delay > 0) { m.delay -= dt; continue; }
+      m.t += dt / m.dur;
+      if (m.t >= 1 && m.part) {
+        const q = m.part, [ex, ey] = this.mouth(m.p, g, m.dir > 0 ? g.R + 34 * g.k : g.R - 34 * g.k, m.da);
+        q.x = ex; q.y = ey; q.vx = 0; q.vy = 0; q.where = m.dir > 0 ? "out" : "in"; q.busy = false;
+      }
+    }
+    this.moving = this.moving.filter((m) => m.t < 1);
+  }
+  private pos(m: Crossing, g: ReturnType<CellStage["geometry"]>) {
+    const rIn = g.R - 16 * g.k, rOut = g.R + 16 * g.k;
+    const [ax, ay] = this.mouth(m.p, g, m.dir > 0 ? rIn : rOut, m.da);
+    const [bx, by] = this.mouth(m.p, g, m.dir > 0 ? rOut : rIn, m.da);
+    const ease = (u: number) => u * u * (3 - 2 * u);
+    if (m.rim) {
+      // from just inside (or outside) the pore to the far membrane face, where the rim is
+      const [cx, cy] = this.mouth(m.p, g, m.dir > 0 ? g.R + 8 : g.R - 8, m.da * 3);
+      if (m.t < 0.6) { const u = ease(m.t / 0.6); return [ax + (bx - ax) * u, ay + (by - ay) * u]; }
+      const u = ease((m.t - 0.6) / 0.4); return [bx + (cx - bx) * u, by + (cy - by) * u];
+    }
+    const [ex, ey] = this.mouth(m.p, g, m.dir > 0 ? g.R + 34 * g.k : g.R - 34 * g.k, m.da);
+    if (m.t < 0.35) { const u = ease(m.t / 0.35); return [m.x0 + (ax - m.x0) * u, m.y0 + (ay - m.y0) * u]; }
+    if (m.t < 0.7) { const u = ease((m.t - 0.35) / 0.35); return [ax + (bx - ax) * u, ay + (by - ay) * u]; }
+    const u = ease((m.t - 0.7) / 0.3); return [bx + (ex - bx) * u, by + (ey - by) * u];
   }
   draw() {
     const g = this.geometry();
     const { ctx } = fit(this.c, this.o.height);
     ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, g.w, g.h);
     ctx.fillStyle = "#1a1626"; ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.fill();
-    ctx.font = "11px system-ui, sans-serif"; ctx.fillStyle = cssVar("--muted"); ctx.textAlign = "left"; ctx.textBaseline = "top";
-    ctx.fillText("outside (bath)", 8, 8);
-    ctx.textAlign = "center"; ctx.fillText("inside", g.cx, g.cy - g.R + 14);
-    for (const q of this.parts) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? 4.2 : 3.6, Math.max(0, q.a) * 0.9);
-    ctx.strokeStyle = cssVar("--membrane"); ctx.lineWidth = 7; ctx.globalAlpha = 0.9;
+    for (const q of this.parts) if (!q.busy) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? 4.4 : 3.8, Math.max(0, q.a) * 0.92);
+    ctx.strokeStyle = cssVar("--membrane"); ctx.lineWidth = 8; ctx.globalAlpha = 0.9;
     ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.stroke(); ctx.globalAlpha = 1;
+    this.drawRim(ctx, g);
     this.pathways.forEach((pw) => this.drawPathway(ctx, g, pw));
-    for (const tk of this.tokens) {
-      const pw = this.pathways[tk.p]; if (!pw) continue;
-      const a = pw.angle + tk.jitter;
-      const r0 = g.R - 34, r1 = g.R + 34;
-      const s = tk.dir > 0 ? tk.s : 1 - tk.s;
-      const rr = r0 + (r1 - r0) * s;
-      glyph(ctx, tk.ion, g.cx + Math.cos(a) * rr, g.cy + Math.sin(a) * rr, 5, Math.sin(Math.PI * tk.s));
+    for (const m of this.moving) {
+      if (m.delay > 0) continue;
+      const [x, y] = this.pos(m, g);
+      if (m.rim) {
+        ctx.save(); ctx.globalAlpha = m.t > 0.85 ? (1 - m.t) / 0.15 : 1;
+        ctx.strokeStyle = color(m.ion); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, 2 * Math.PI); ctx.stroke(); ctx.restore();
+      } else glyph(ctx, m.ion, x, y, 4.6, 1);
     }
+    this.drawScale(ctx, g);
+  }
+  private drawRim(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
+    if (this.V === null || Math.abs(this.V) < 0.5) return;
+    const ions = (0.01 * 4 * Math.PI * 1e-10 * Math.abs(this.V / 1000)) / 1.602176634e-19; // C·V/e for the 10 µm cell
+    const n = Math.min(160, Math.round(ions / IONS_PER_SIGN));
+    const neg = this.V < 0;
+    ctx.save();
+    ctx.font = "700 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(n, 1)) * 2 * Math.PI + 0.013;
+      for (const [r, s] of [[g.R + 9, neg ? "+" : "−"], [g.R - 9, neg ? "−" : "+"]] as const) {
+        ctx.fillStyle = s === "+" ? "#ffb4a2" : "#9ad1ff";
+        ctx.fillText(s, g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r);
+      }
+    }
+    ctx.restore();
+  }
+  private drawScale(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
+    const ipd = this.ionsPerDot();
+    const big = (x: number) => (x >= 1e9 ? (x / 1e9).toFixed(0) + " billion" : (x / 1e6).toFixed(0) + " million");
+    const tag = (t: string, x: number, y: number, align: CanvasTextAlign) => {
+      ctx.font = "11px system-ui, sans-serif"; ctx.textAlign = align; ctx.textBaseline = "middle";
+      const wd = ctx.measureText(t).width, x0 = align === "right" ? x - wd : align === "center" ? x - wd / 2 : x;
+      ctx.fillStyle = "rgba(13,17,23,0.82)"; ctx.fillRect(x0 - 5, y - 8, wd + 10, 16);
+      ctx.fillStyle = cssVar("--muted"); ctx.fillText(t, x, y);
+    };
+    tag("outside (bath)", 10, 14, "left");
+    tag("inside", g.cx, g.cy - g.R + 22, "center");
+    tag(`each dot ≈ ${big(ipd)} ions`, g.w - 10, g.h - 28, "right");
+    tag(`each ± on the membrane ≈ ${Math.round(IONS_PER_SIGN / 1000)},000 ions`, g.w - 10, g.h - 11, "right");
+    if (this.thinning > 1.5) tag(`clock this fast: 1 in ${Math.round(this.thinning)} crossings shown, both ways alike`, g.w - 10, g.h - 45, "right");
   }
   private drawPathway(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, pw: Pathway) {
+    const k = g.k * 1.35;
     const x = g.cx + Math.cos(pw.angle) * g.R, y = g.cy + Math.sin(pw.angle) * g.R;
     ctx.save();
-    ctx.translate(x, y); ctx.rotate(pw.angle + Math.PI / 2);
+    ctx.translate(x, y); ctx.rotate(pw.angle + Math.PI / 2); ctx.scale(k, k);
     const col = pw.ions && pw.ions.length === 1 ? color(pw.ions[0]) : cssVar("--text");
     if (pw.kind === "channel") {
-      ctx.fillStyle = "#101826"; ctx.fillRect(-7, -6, 14, 12);
-      ctx.fillStyle = col;
-      ctx.fillRect(-11, -9, 5, 18); ctx.fillRect(6, -9, 5, 18);
-      if (!pw.open) { ctx.fillStyle = cssVar("--muted"); ctx.fillRect(-6, -2, 12, 4); }
+      ctx.fillStyle = "#101826"; ctx.fillRect(-6, -9, 12, 18);
+      ctx.fillStyle = col; ctx.globalAlpha = 0.95;
+      ctx.beginPath(); ctx.roundRect(-14, -12, 8, 24, 3); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(6, -12, 8, 24, 3); ctx.fill();
+      ctx.globalAlpha = 1;
+      if (!pw.open) { ctx.fillStyle = cssVar("--muted"); ctx.fillRect(-6, -2.5, 12, 5); }
     } else if (pw.kind === "pump" || pw.kind === "pmca") {
       ctx.fillStyle = pw.on === false ? "#3a3a3a" : pw.kind === "pump" ? "#b9a3ff" : cssVar("--ca");
-      ctx.beginPath(); ctx.arc(0, 0, 13, 0, 2 * Math.PI); ctx.fill();
-      ctx.strokeStyle = "#0d1117"; ctx.lineWidth = 2;
-      for (let i = 0; i < 3; i++) { const a = (pw.phase || 0) + (i * 2 * Math.PI) / 3; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 11, Math.sin(a) * 11); ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(0, 0, 16, 0, 2 * Math.PI); ctx.fill();
+      ctx.strokeStyle = "#0d1117"; ctx.lineWidth = 2.5;
+      for (let i = 0; i < 3; i++) { const a = (pw.phase || 0) + (i * 2 * Math.PI) / 3; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 14, Math.sin(a) * 14); ctx.stroke(); }
     } else {
       ctx.fillStyle = pw.on === false ? "#3a3a3a" : pw.kind === "nkcc1" ? "#7fb069" : "#e07a5f";
-      ctx.beginPath(); ctx.roundRect(-14, -9, 28, 18, 5); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(-18, -12, 36, 24, 6); ctx.fill();
     }
     ctx.restore();
     if (pw.label) {
-      const lx = g.cx + Math.cos(pw.angle) * (g.R + 26), ly = g.cy + Math.sin(pw.angle) * (g.R + 26);
-      ctx.font = "600 11px system-ui, sans-serif"; ctx.fillStyle = cssVar("--text"); ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(pw.label, lx, ly);
+      const lx = g.cx + Math.cos(pw.angle) * (g.R + 40 * g.k), ly = g.cy + Math.sin(pw.angle) * (g.R + 40 * g.k);
+      ctx.font = "600 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#101826"; ctx.strokeText(pw.label, lx, ly);
+      ctx.fillStyle = cssVar("--text"); ctx.fillText(pw.label, lx, ly);
     }
   }
 }

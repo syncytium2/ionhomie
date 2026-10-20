@@ -1,5 +1,5 @@
 import * as I from "../core/physics.ts";
-import { $, CellStage, LABEL, Trace, Z, color, cssVar, fit, fmtBig, fmtMv, loop, minus, ruler, setText } from "../views/draw.ts";
+import { $, CellStage, IONS_PER_SIGN, LABEL, Trace, Z, balance, color, cssVar, fit, fmtBig, fmtMv, loop, minus, ruler, setText } from "../views/draw.ts";
 import { Below, ModelNote, useEngine } from "./parts.tsx";
 
 type Mono = "K" | "Na" | "Cl";
@@ -101,9 +101,22 @@ function engine() {
     for (let k = 0; k < n; k++) V += I.dVdt(P(), V, set.ci, set.co, cm, set.T) * (d / n);
     t += d;
     const cur = currents(V);
-    const rate = (ion: Mono) => Math.sign(cur[ion] * Z[ion]) * Math.min(30, 9 * Math.sqrt(Math.abs(cur[ion]) * 1e12));
-    stage.flow([{ K: rate("K") }, { Na: rate("Na") }, { Cl: rate("Cl") }], dt);
+    const p = P(), kk = (area * 6.02214076e23 * simPerReal) / IONS_PER_SIGN;
+    (["K", "Na", "Cl"] as Mono[]).forEach((ion, i) => {
+      const u = I.ghkUnidirectional(p[ion], Z[ion], V, set.ci[ion], set.co[ion], set.T);
+      stage.flowRim(i, ion, u.efflux * kk, u.influx * kk, dt);
+    });
+    stage.setV(mv(V));
     stage.step(dt); stage.draw();
+    const outward = (["K", "Na", "Cl"] as Mono[]).filter((ion) => cur[ion] > 0), inward = (["K", "Na", "Cl"] as Mono[]).filter((ion) => cur[ion] < 0);
+    const sumOut = outward.reduce((a, ion) => a + cur[ion], 0), sumIn = -inward.reduce((a, ion) => a + cur[ion], 0);
+    balance($<HTMLCanvasElement>("balance"), {
+      leftTitle: "outward current", rightTitle: "inward current",
+      left: outward.map((ion) => ({ label: LABEL[ion], value: cur[ion], color: color(ion) })),
+      right: inward.map((ion) => ({ label: LABEL[ion], value: -cur[ion], color: color(ion) })),
+      tilt: (sumIn - sumOut) / Math.max(1e-15, sumIn + sumOut),
+      caption: Math.abs(sumIn - sumOut) / Math.max(1e-15, sumIn + sumOut) < 0.03 ? "level: currents cancel, ions still flow" : "tilted: Vm is moving",
+    });
     acc += dt;
     if (acc > 0.02) { acc = 0; trace.push(t, { v: mv(V) }); }
     trace.draw();
@@ -138,6 +151,7 @@ export default function Ghk() {
         </div>
         <div className="stack">
           <div className="panel"><h3>Voltage ruler</h3><canvas id="ruler" /></div>
+          <div className="panel"><h3>The balance</h3><canvas id="balance" /></div>
         </div>
       </div>
       <div className="grid">
@@ -169,7 +183,9 @@ export default function Ghk() {
         <div className="predict"><b>Predict.</b> The typical resting cell is fifty times more permeable to K⁺ than to Na⁺. Does Vm sit on E_K?
           If not, how far off? And once Vm has settled, have the ions stopped moving?</div>
         <h2>Steady, not at equilibrium</h2>
-        <p className="notice">The currents sum to zero, so Vm holds still, but none of them is zero: K⁺ leaks out and Na⁺ leaks in, continuously.</p>
+        <p className="notice">The currents sum to zero, so the balance is level and Vm holds still, but neither pan is empty: K⁺ leaks out and Na⁺
+          leaks in, continuously. Watch the channels: K⁺ rings leave faster than they return, Na⁺ rings arrive faster than they leave, and Cl⁻, almost
+          exactly at its reversal potential, crosses equally both ways. (Rings are drawn at the membrane-charge scale, about 110,000 ions each.)</p>
         <p className="notice" id="leak-note" />
         <details>
           <summary>The math</summary>

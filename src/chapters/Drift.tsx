@@ -2,7 +2,7 @@ import * as I from "../core/physics.ts";
 import { $, color, fit, fmtMv, gauss, glyph, loop, minus, setText, type Species } from "../views/draw.ts";
 import { Below, ModelNote, useEngine } from "./parts.tsx";
 
-const L = 2e-6, H = 1.2e-6, PER = 380, BINS = 30, simPerReal = 0.0012;
+const L = 2e-6, H = 1.2e-6, PER = 380, BINS = 30, SAMPLE = 1 / 12;
 interface Sp { ion: Species; z: number; D: number; on: boolean; name: string; bAvg?: number }
 
 function engine() {
@@ -12,14 +12,14 @@ function engine() {
     { ion: "Ca", z: 2, D: I.D_FREE.Ca, on: false, name: "Ca²⁺" },
     { ion: "X", z: 0, D: 0.67e-9, on: true, name: "neutral (glucose-like)" },
   ];
-  let dV = 0.06, focus: Species = "K";
-  let parts: { s: Sp; x: number; y: number }[] = [];
+  let dV = 0.06, focus: Species = "K", simPerReal = 0.0012, sampleAcc = 0, everyFrame = false;
+  let parts: { s: Sp; x: number; y: number; px: number; py: number }[] = [];
   const rtf = I.rtf();
 
   function mix() {
     parts = [];
     for (const s of SPECIES) s.bAvg = undefined;
-    for (const s of SPECIES) if (s.on) for (let i = 0; i < PER; i++) parts.push({ s, x: Math.random() * L, y: Math.random() * H });
+    for (const s of SPECIES) if (s.on) for (let i = 0; i < PER; i++) { const x = Math.random() * L, y = Math.random() * H; parts.push({ s, x, y, px: x, py: y }); }
   }
   const box = $("species");
   box.replaceChildren();
@@ -37,6 +37,8 @@ function engine() {
   }
   $<HTMLInputElement>("dv").oninput = (e) => { const v = +(e.target as HTMLInputElement).value; dV = v / 1000; setText("dv-o", fmtMv(v, 0)); };
   $("reset").onclick = mix;
+  $<HTMLSelectElement>("speed").onchange = (e) => { simPerReal = +(e.target as HTMLSelectElement).value; };
+  $<HTMLInputElement>("every").onchange = (e) => { everyFrame = (e.target as HTMLInputElement).checked; };
 
   function physics(dtReal: number) {
     const dt = dtReal * simPerReal;
@@ -98,7 +100,8 @@ function engine() {
     plate(0, Math.sign(dV));
     plate(W - pad + 4, -Math.sign(dV));
     const sx = (W - 2 * pad) / L, sy = Hp / H;
-    for (const p of parts) glyph(ctx, p.s.ion, pad + p.x * sx, p.y * sy, p.s.ion === "Ca" ? 3 : 3.4, 0.9);
+    const f = everyFrame ? 1 : Math.min(1, sampleAcc / SAMPLE);
+    for (const p of parts) glyph(ctx, p.s.ion, pad + (p.px + (p.x - p.px) * f) * sx, (p.py + (p.y - p.py) * f) * sy, p.s.ion === "Ca" ? 3 : 3.4, 0.9);
   }
 
   function drawProfile(P: Partial<Record<Species, Prof>>) {
@@ -169,7 +172,11 @@ function engine() {
   mix();
   let k = 0, P = profiles();
   return loop((dt) => {
-    physics(dt);
+    if (everyFrame) { for (const p of parts) { p.px = p.x; p.py = p.y; } physics(dt); }
+    else {
+      sampleAcc += dt;
+      if (sampleAcc >= SAMPLE) { sampleAcc -= SAMPLE; for (const p of parts) { p.px = p.x; p.py = p.y; } physics(SAMPLE); }
+    }
     if (++k % 6 === 0) { P = profiles(); drawReadback(P); }
     drawStage(); drawProfile(P); drawFluxes(P);
   });
@@ -185,6 +192,8 @@ export default function Drift() {
           <div className="controls">
             <label>Left side relative to right <input type="range" id="dv" min="-120" max="120" step="5" defaultValue="60" /><output id="dv-o">60 mV</output></label>
             <button id="reset">Mix again</button>
+            <label>Speed <select id="speed" defaultValue="0.0012"><option value="0.0003">slowed 3,000×</option><option value="0.0012">slowed 800×</option><option value="0.005">slowed 200×</option></select></label>
+            <label><input type="checkbox" id="every" /> show every frame</label>
           </div>
           <div className="controls" id="species" />
         </div>
@@ -203,7 +212,7 @@ export default function Drift() {
         <h3>Concentration across the box</h3>
         <canvas id="profile" />
         <p className="src">Lines: the particles, counted in slices and smoothed. Dashed: the Boltzmann prediction, C(x) ∝ exp(−zFφ(x)/RT),
-          each scaled to its own mean. The box is 2 µm across, slowed about 800×.</p>
+          each scaled to its own mean. The box is 2 µm across. Dots are shown 12 times a second, gliding between true samples of the walk.</p>
       </div>
 
       <Below>

@@ -7,7 +7,9 @@ const SPEED_VAR: Record<string, string> = { K: "--k", Na: "--na", Cl: "--cl", Ca
 
 function engine() {
   let ion: Species = "K", D = I.D_FREE.K, simPerReal = 0.002;
-  let parts: { x: number; y: number; u: number }[] = [];
+  let parts: { x: number; y: number; u: number; px: number; py: number }[] = [];
+  const SAMPLE = 1 / 12; // real seconds between samples of the walk; dots glide between them
+  let sampleAcc = 0, everyFrame = false;
   let lifted = false, t = 0, crossNet = 0, crossLog: [number, number][] = [];
   const msd = new Trace($<HTMLCanvasElement>("msd"), {
     series: [{ key: "m", color: "--k", label: "particles" }, { key: "p", color: "#e6edf3", label: "2Dt", dash: [4, 4], width: 1.5 }],
@@ -17,12 +19,13 @@ function engine() {
 
   function reset() {
     parts = [];
-    for (let i = 0; i < N; i++) parts.push({ x: Math.random() * (L / 2), y: Math.random() * H, u: 0 });
+    for (let i = 0; i < N; i++) { const x = Math.random() * (L / 2), y = Math.random() * H; parts.push({ x, y, u: 0, px: x, py: y }); }
     lifted = false; t = 0; crossNet = 0; crossLog = []; msd.clear();
     lift.disabled = false;
   }
   function setIon(v: Species) {
     ion = v; D = I.D_FREE[v as I.Ion];
+    setTimeout(stepNote);
     msd.o.series[0].color = SPEED_VAR[v];
     setText("r-d", (D * 1e9).toFixed(2) + " × 10⁻⁹ m²/s");
     reset();
@@ -30,7 +33,12 @@ function engine() {
   lift.onclick = () => { lifted = true; lift.disabled = true; for (const p of parts) p.u = 0; };
   $("reset").onclick = reset;
   $<HTMLSelectElement>("ion").onchange = (e) => setIon((e.target as HTMLSelectElement).value as Species);
-  $<HTMLSelectElement>("speed").onchange = (e) => { simPerReal = +(e.target as HTMLSelectElement).value; };
+  const stepNote = () => {
+    const step = Math.sqrt(2 * D * SAMPLE * simPerReal) * 1e9;
+    setText("r-step", `${step.toFixed(0)} nm per sample, for a ${fmtTime(SAMPLE * simPerReal)} sample`);
+  };
+  $<HTMLSelectElement>("speed").onchange = (e) => { simPerReal = +(e.target as HTMLSelectElement).value; stepNote(); };
+  $<HTMLInputElement>("every").onchange = (e) => { everyFrame = (e.target as HTMLInputElement).checked; };
   setText("t1", fmtTime(I.diffusionTime1D(10e-9, I.D_FREE.K)));
   setText("t2", fmtTime(I.diffusionTime1D(1e-6, I.D_FREE.K)));
   setText("t3", fmtTime(I.diffusionTime1D(100e-6, I.D_FREE.K)));
@@ -70,7 +78,8 @@ function engine() {
     const { ctx } = fit(c, Hp);
     ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, W, Hp);
     const sx = W / L, sy = Hp / H;
-    for (const p of parts) glyph(ctx, ion, p.x * sx, p.y * sy, 3.2, 0.9);
+    const f = everyFrame ? 1 : Math.min(1, sampleAcc / SAMPLE);
+    for (const p of parts) glyph(ctx, ion, (p.px + (p.x - p.px) * f) * sx, (p.py + (p.y - p.py) * f) * sy, 3.2, 0.9);
     if (!lifted) { ctx.fillStyle = cssVar("--muted"); ctx.fillRect(W / 2 - 2, 0, 4, Hp); }
     else { ctx.setLineDash([3, 5]); ctx.strokeStyle = cssVar("--line"); ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, Hp); ctx.stroke(); ctx.setLineDash([]); }
     if (lifted) {
@@ -125,7 +134,11 @@ function engine() {
   setIon("K");
   let since = 0;
   return loop((dt) => {
-    physics(dt);
+    if (everyFrame) { for (const p of parts) { p.px = p.x; p.py = p.y; } physics(dt); }
+    else {
+      sampleAcc += dt;
+      if (sampleAcc >= SAMPLE) { sampleAcc -= SAMPLE; for (const p of parts) { p.px = p.x; p.py = p.y; } physics(SAMPLE); }
+    }
     since += dt;
     if (lifted && since > 0.05) {
       since = 0;
@@ -148,6 +161,7 @@ export default function Diffusion() {
           <button id="reset">Reset</button>
           <label>Ion <select id="ion"><option value="K">K⁺</option><option value="Na">Na⁺</option><option value="Cl">Cl⁻</option><option value="Ca">Ca²⁺</option></select></label>
           <label>Speed <select id="speed" defaultValue="0.002"><option value="0.0005">slowed 2,000×</option><option value="0.002">slowed 500×</option><option value="0.01">slowed 100×</option></select></label>
+          <label><input type="checkbox" id="every" /> show every frame</label>
         </div>
       </div>
       <div className="grid">
@@ -171,6 +185,7 @@ export default function Diffusion() {
             <Readout id="r-d" k="D, free solution, 25 °C" />
             <Readout id="r-right" k="in the right half" />
             <Readout id="r-cross" k="crossing the middle, net" />
+            <Readout id="r-step" k="a typical step" />
           </div>
         </div>
         <div className="panel">
@@ -194,6 +209,9 @@ export default function Diffusion() {
         <div className="predict"><b>Predict.</b> A K⁺ ion takes about a quarter of a millisecond to wander 1 µm. How long will the
           crowd take to spread across this 10 µm box: about 10 times longer, or about 100 times? Reset, lift the partition and
           watch the clock.</div>
+        <p className="notice"><b>Why slowing the clock calms the spreading more than the jiggle.</b> Each step of a random walk grows with the square root
+          of the time it covers. Slow the clock 4× and the crowd spreads 4× more slowly, but each step shrinks only 2×. The dots are shown 12 times a
+          second, gliding between true samples of the walk; tick "show every frame" to see each step as a jump.</p>
         <p className="notice">Ten times the distance takes a hundred times as long. Diffusion is fast across a membrane and hopeless
           across a body; that is why bodies have circulations.</p>
 

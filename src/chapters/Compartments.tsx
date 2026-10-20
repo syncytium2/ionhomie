@@ -23,6 +23,7 @@ function engine() {
     `<tr><td colspan="3" class="src">Outside, X⁻ (${bath.X} mM) stands for bicarbonate, phosphate and the other anions; each A⁻ carries ${minus(h.cell.zA.toFixed(2))} charges.</td></tr>`;
 
   const draw = () => {
+    stage.setV(V);
     ruler($<HTMLCanvasElement>("ruler"), { V, E: { K: mv(s.E.K), Na: mv(s.E.Na), Cl: mv(s.E.Cl) }, g: { K: 0, Na: 0, Cl: 0 }, min: -110, max: 80, height: 380 });
     ledger($<HTMLCanvasElement>("ledger"), { V });
     gauges($<HTMLCanvasElement>("gauges"), { ions: ["Na", "K", "Cl", "A"], ci, co: { Na: bath.Na, K: bath.K, Cl: bath.Cl } });
@@ -72,6 +73,8 @@ export default function Compartments() {
         <div className="predict"><b>Predict.</b> To charge this membrane to −80 mV, about where this cell will rest, roughly what fraction of
           the cell's K⁺ has to cross it: a tenth, a hundredth, or much less? Move the slider and read the ledger.</div>
         <ul className="notice">
+          <li><b>The charge sits on the membrane, not in the cell.</b> Move the slider and the ± rim builds on the two faces of the membrane, each sign
+            about 110,000 ions; not one dot inside or outside changes, because each dot is billions of ions.</li>
           <li><b>The gradients already define an equilibrium potential for each ion</b> (the ruler's ticks). With the membrane closed, no
             ion can act on it: the arrows are faint because nothing conducts.</li>
           <li><b>The bulk of each compartment carries no net charge</b> (electroneutrality). The excess that sets Vm is so small it does

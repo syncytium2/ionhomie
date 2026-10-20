@@ -43,6 +43,9 @@ change so the two never disagree.
 | [0005](0005-two-dimensions-first.md) | Two dimensions first | Accepted |
 | [0006](0006-proof-of-principle-pages-are-single-html-files.md) | The proof-of-principle pages are single HTML files that refuse every request | Accepted; superseded as the product by ADR-0010 |
 | [0007](0007-the-name-is-ionhomie.md) | The name is ionhomie, on GitHub as syncytium2/ionhomie | Accepted (Tony) |
-| [0008](0008-lead-with-the-action.md) | Lead with the action; the stamp sits beside the title | Accepted (Tony) |
+| [0008](0008-lead-with-the-action.md) | Lead with the action; the stamp sits beside the title | Accepted (Tony); its title row superseded by ADR-0012 |
 | [0009](0009-numbers-and-colors-follow-the-578-lectures.md) | The numbers and the ion colors follow the Physiol 578 lectures | Accepted (Tony asked; the details are Claude's, not ruled on) |
 | [0010](0010-the-app-is-react-on-the-ported-core.md) | The app is React over the ported core, one route per chapter | Accepted (Tony asked; the structure is Claude's, not ruled on) |
+| [0011](0011-every-dot-and-crossing-is-on-a-stated-scale.md) | Every dot and every crossing is on a stated scale, and the scales agree | Accepted (Tony's review; the design is Claude's) |
+| [0012](0012-a-nav-bar-on-every-page.md) | A nav bar on every page: brand and stamp, then every chapter | Accepted (Tony) |
+| [0013](0013-a-balance-beside-the-ruler.md) | A balance beside the ruler, and a zero line with weight | Accepted (Tony asked; the forms are Claude's) |

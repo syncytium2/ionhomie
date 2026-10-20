@@ -130,3 +130,15 @@ test("The cotransporter presets reach the E_Cl values the chloride chapter quote
   for (let t = 0; t < 30000; t += 2) n = I.step(h.cell, n, 2).n;
   close(I.snapshot(h.cell, n).V * 1000, -59.88, 0.05, "Vm with the GnRH preset: Cl⁻ is half of the resting permeability, so loading it drags Vm");
 });
+
+test("The one-way GHK fluxes add back to the net flux, and are equal at the reversal potential", () => {
+  for (const [z, co, ci] of [[1, 5, 140], [1, 145, 10], [-1, 106, 5.24], [2, 2.5, 1e-4]]) {
+    for (const V of [-0.09, -0.05, 0, 0.03]) {
+      const u = I.ghkUnidirectional(1e-8, z, V, ci, co);
+      close(u.efflux - u.influx, I.ghkFlux(1e-8, z, V, ci, co), 1e-12 * Math.max(1, Math.abs(u.efflux)), `z=${z} V=${V}`);
+      assert.ok(u.efflux >= 0 && u.influx >= 0);
+    }
+    const E = I.nernst(z, co, ci), u = I.ghkUnidirectional(1e-8, z, E, ci, co);
+    close(u.efflux / u.influx, 1, 1e-9, `equal at E, z=${z}`);
+  }
+});

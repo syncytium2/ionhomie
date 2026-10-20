@@ -46,6 +46,17 @@ export function ghkFlux(P: number, z: number, V: number, ci: number, co: number,
   const e = Math.exp(-u);
   return (P * u * (ci - co * e)) / (1 - e);
 }
+/**
+ * The GHK flux split into its two one-way parts, mol/(m²·s), both positive: efflux (in → out)
+ * and influx (out → in). efflux − influx is ghkFlux exactly. At the reversal potential they are
+ * equal: ions still cross both ways, with nothing net. The views draw these, not the net.
+ */
+export function ghkUnidirectional(P: number, z: number, V: number, ci: number, co: number, T = T37) {
+  const u = (z * V) / rtf(T);
+  if (Math.abs(u) < 1e-6) return { efflux: P * ci * (1 + u / 2), influx: P * co * (1 - u / 2) };
+  const e = Math.exp(-u), k = (P * u) / (1 - e);
+  return { efflux: k * ci, influx: k * co * e };
+}
 /** GHK current density, A/m², outward positive. */
 export const ghkCurrent = (P: number, z: number, V: number, ci: number, co: number, T = T37) => z * F * ghkFlux(P, z, V, ci, co, T);
 

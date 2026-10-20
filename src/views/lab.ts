@@ -26,7 +26,7 @@ export class Lab {
 
   constructor(opts: Partial<LabOpts>) {
     this.o = { pump: true, ca: false, ccc: false, speed: 300, autorun: false, ions: ["Na", "K", "Cl", "A"], stageHeight: 380, ...opts };
-    this.stage = new CellStage($<HTMLCanvasElement>("stage"), { height: this.o.stageHeight, ions: this.o.ions });
+    this.stage = new CellStage($<HTMLCanvasElement>("stage"), { height: this.o.stageHeight, ions: this.o.ions, mode: "amounts", cellVolume: I.sphere(10e-6).volume });
     const grow = { window: 600, grow: true, xFmt: minutes };
     const vSeries: Series[] = [{ key: "v", color: "--accent", label: "Vm" }];
     if (this.o.ccc) vSeries.push({ key: "ecl", color: "--cl", label: "E_Cl", dash: [5, 4] });
@@ -106,27 +106,43 @@ export class Lab {
     this.record(false);
   }
 
-  /** Tokens: each ion's direction; rate on a square-root scale against the healthy pump. */
+  /**
+   * Crossings at the bulk scale: every leak's two one-way fluxes, every pump and cotransporter
+   * cycle, at the model's rates × the clock speed, in dots per real second (docs/adr/0011).
+   */
   private flows(dt: number) {
-    const s = this.s, r = (x: number) => Math.sign(x) * Math.min(26, 10 * Math.sqrt(Math.abs(x) / this.ref));
-    const rates: (Partial<Record<Species, number>> | null)[] = [{ K: r(s.leak.K) }, { Na: r(s.leak.Na) }, { Cl: r(s.leak.Cl) }];
-    if (this.o.pump) rates.push(s.pump > 0 ? { Na: r(3 * s.pump), K: r(-2 * s.pump) } : null);
-    if (this.o.ca) rates.push(s.pmca > 0 ? { Ca: r(s.pmca * 1e4) } : null);
+    const s = this.s, NA = 6.02214076e23, ipd = this.stage.ionsPerDot();
+    const pw = this.stage.pathways;
+    const at = (key: string) => pw.findIndex((p) => p.key === key);
+    const one = (["K", "Na", "Cl"] as const).map((ion) => ({ ion, u: I.ghkUnidirectional(this.cell.P[ion], I.ION_Z[ion], s.V, s.ci[ion], this.bath[ion]) }));
+    let perReal = this.running ? (NA * this.o.speed) / ipd : 0; // mol/s → dots per real second
+    // At a fast clock the true one-way rates outrun the eye. Show 1 in k of them, in both directions
+    // alike, so the ratio of in to out is kept; any net change still arrives as crossings (the stage
+    // corrects its counts through the ion's own leak). The stage says when it is thinning.
+    const fastest = Math.max(...one.map(({ u }) => Math.max(u.efflux, u.influx) * s.area), 5 * s.pump, 4 * Math.abs(s.nkcc1), 2 * Math.abs(s.kcc2)) * perReal;
+    const k = Math.max(1, fastest / 6);
+    this.stage.thinning = k;
+    perReal /= k;
+    for (const { ion, u } of one) this.stage.flowBulk(at(ion), ion, u.efflux * s.area * perReal, u.influx * s.area * perReal, dt);
+    if (this.o.pump && at("pump") >= 0) this.stage.flowGroup(at("pump"), [{ ion: "Na", dir: 1 }, { ion: "Na", dir: 1 }, { ion: "Na", dir: 1 }, { ion: "K", dir: -1 }, { ion: "K", dir: -1 }], s.pump * perReal, dt);
     if (this.o.ccc) {
-      rates.push(s.nkcc1 ? { Na: r(-s.nkcc1), K: r(-s.nkcc1), Cl: r(-2 * s.nkcc1) } : null);
-      rates.push(s.kcc2 ? { K: r(s.kcc2), Cl: r(s.kcc2) } : null);
+      this.stage.flowGroup(at("nkcc1"), [{ ion: "Na", dir: -1 }, { ion: "K", dir: -1 }, { ion: "Cl", dir: -1 }, { ion: "Cl", dir: -1 }], s.nkcc1 * perReal, dt);
+      this.stage.flowGroup(at("kcc2"), [{ ion: "K", dir: 1 }, { ion: "Cl", dir: 1 }], s.kcc2 * perReal, dt);
     }
-    for (const pw of this.stage.pathways) {
-      if (pw.key === "pump") pw.phase = (pw.phase || 0) + dt * 6 * (s.pump / this.ref);
-      if (pw.key === "pmca") pw.phase = (pw.phase || 0) + dt * 3 * Math.min(2, s.pmca > 0 ? 1 : 0);
+    // rotors turn with their cycle rates, relative to the healthy pump
+    for (const p of pw) {
+      if (p.key === "pump") p.phase = (p.phase || 0) + dt * 3 * (s.pump / this.ref) * (this.running ? 1 : 0.2);
+      if (p.key === "pmca") p.phase = (p.phase || 0) + dt * 2 * (s.pmca > 0 ? 1 : 0);
     }
-    this.stage.flow(rates, dt);
   }
 
   draw(dt: number, ions: ("Na" | "K" | "Cl" | "Ca")[] = ["Na", "K", "Cl"], rulerHeight = 380) {
     const s = this.s;
     this.flows(dt);
-    this.stage.setConcentrations({ Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A, Ca: s.ci.Ca }, this.bath, s.volume / this.vol0);
+    const NA = 6.02214076e23;
+    this.stage.setConcentrations({ Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A }, this.bath, s.volume / this.vol0);
+    this.stage.setAmounts({ Na: this.n.Na * NA, K: this.n.K * NA, Cl: this.n.Cl * NA, A: this.n.A * NA });
+    this.stage.setV(s.V * 1000);
     this.stage.step(dt); this.stage.draw();
     const E: Partial<Record<Species, number>> = {}, g: Partial<Record<Species, number>> = {};
     const tot = this.cell.P.K + this.cell.P.Na + this.cell.P.Cl;

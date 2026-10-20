@@ -30,6 +30,9 @@ export function ModelNote() {
       <b>About these models.</b> The concentrations and the resting permeability ratio (pK : pNa : pCl = 1 : 0.02 : 0.5)
       follow the Physiol 578 lectures. The cell is a generic 10 µm sphere; the absolute permeabilities, pump and
       transporter rates are illustrative, chosen so things happen at a watchable pace, and are not fit to any one cell.
+      <b> How to read the cell:</b> each dot stands for billions of ions (the count is printed on the stage). Where the cell runs for minutes,
+      a dot crossing a channel, pump or transporter is the model's own flux at the clock's speed, so the dots that cross are the dots that pile
+      up. The ± rim on the membrane is the charge that sets Vm, at its own printed scale; Ca²⁺ inside (0.1 µM) is far too dilute to draw.
       Everything runs in this page; nothing is sent anywhere.
     </p>
   );

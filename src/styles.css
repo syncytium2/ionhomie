@@ -86,3 +86,14 @@ th { color: var(--muted); font-weight: 600; }
 .chapters .n { color: var(--muted); font-family: var(--mono); margin-right: 8px; }
 .home-hero .panel h3 { margin-top: 2px; }
 footer.src { margin-top: 28px; }
+
+/* the nav bar (docs/adr/0012): brand and stamp, then every chapter */
+.navbar { border-bottom: 1px solid var(--line); margin-bottom: 14px; padding-top: 10px; }
+.brandline { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.brand { font-weight: 750; font-size: 1.2rem; color: var(--text); text-decoration: none; letter-spacing: 0.01em; }
+.brandline .stamp { display: inline; margin: 0; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; white-space: nowrap; padding: 8px 0 0; scrollbar-width: thin; }
+.tab { padding: 6px 10px 8px; border-radius: 8px 8px 0 0; color: var(--muted); text-decoration: none; font-size: 0.9rem; border-bottom: 2px solid transparent; flex: none; }
+.tab .n { font-family: var(--mono); font-size: 0.75rem; margin-right: 5px; opacity: 0.7; }
+.tab:hover { color: var(--text); }
+.tab.here { color: var(--text); border-bottom-color: var(--accent); background: var(--panel); }
