@@ -11,7 +11,8 @@ Nothing important is kept in this file. Read these at the start of a session, in
 
 Commands: `npm run dev`; `npm test` (the physics); `npm run check` (types, tests, a clean build,
 then every route driven in Chromium; look at `screenshots/` afterwards); `npm run deploy` (only
-with Tony's go-ahead). The prototype in `prototype/` has its own checks and is not imported.
+with Tony's go-ahead); `bash scripts/darkroom.sh` (screenshots to the darkroom, named by the estate
+scheme; never copy files there by hand). The prototype in `prototype/` has its own checks and is not imported.
 
 Every page leads with the action ([ADR-0008](docs/adr/0008-lead-with-the-action.md)); the check
 enforces it, so a failing layout check is a real failure, not noise.
