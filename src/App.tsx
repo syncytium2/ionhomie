@@ -15,6 +15,7 @@ function NavBar({ index }: { index: number }) {
     <nav className="navbar">
       <div className="brandline">
         <a className="brand" href="#/">ionhomie</a>
+        <a className="home-return" href="https://tonydefazio.com/">← tonydefazio.com</a>
         <span className="stamp" title={`Born ${BORN === "unborn" ? "—" : fmtStamp(BORN)}; this version ${UPDATED === "unborn" ? "—" : fmtStamp(UPDATED)}`}>
           born {born} · v{VERSION}, {UPDATED === "unborn" ? "unversioned" : fmtDate(UPDATED)}
         </span>

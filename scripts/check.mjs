@@ -56,6 +56,8 @@ for (const [route, script] of Object.entries(ROUTES)) {
       const stamp = document.querySelector(".navbar .stamp")?.textContent ?? "";
       const tabs = document.querySelectorAll(".navbar .tab").length;
       const here = document.querySelector(".navbar .tab.here")?.textContent ?? "";
+      const ret = [...document.querySelectorAll("a")].find((a) => a.getAttribute("href") === "https://tonydefazio.com/");
+      const retTop = ret ? ret.getBoundingClientRect().top : -1;
       const firstText = main?.querySelector(".lede, .predict, .banner, .notice, details");
       const firstCanvas = main?.querySelector("canvas");
       // the stage must actually be drawing ions: count pixels in the K⁺ blue, Cl⁻ orange or Na⁺ white
@@ -74,7 +76,7 @@ for (const [route, script] of Object.entries(ROUTES)) {
         over: document.documentElement.scrollWidth - window.innerWidth,
         firstHasCanvas: !!first?.querySelector("canvas"),
         textAfterCanvas: !firstText || !firstCanvas || !!(firstCanvas.compareDocumentPosition(firstText) & Node.DOCUMENT_POSITION_FOLLOWING),
-        stamp, tabs, here,
+        stamp, tabs, here, retText: ret?.textContent ?? "", retTop,
       };
     });
     if (r.ionPx >= 0 && r.ionPx < 300) problems.push(`${name} [${label}] the stage draws almost no ions (${r.ionPx} ion-colored pixels)`);
@@ -83,6 +85,7 @@ for (const [route, script] of Object.entries(ROUTES)) {
     if (!r.textAfterCanvas) problems.push(`${name} [${label}] text comes before the first visual`);
     if (!/^born .+ · v\d+\.\d+\.\d+, .+$/.test(r.stamp)) problems.push(`${name} [${label}] stamp missing or malformed: "${r.stamp}"`);
     if (r.tabs !== Object.keys(ROUTES).length) problems.push(`${name} [${label}] nav shows ${r.tabs} tabs, expected ${Object.keys(ROUTES).length}`);
+    if (r.retText !== "← tonydefazio.com" || r.retTop < 0 || r.retTop > 120) problems.push(`${name} [${label}] the return link to tonydefazio.com is missing or not at the top ("${r.retText}", top ${r.retTop})`);
     if (!r.here) problems.push(`${name} [${label}] nav marks no tab as the current page`);
     await page.screenshot({ path: join(out, `${name}_${label}.png`), fullPage: true });
     await page.close();
