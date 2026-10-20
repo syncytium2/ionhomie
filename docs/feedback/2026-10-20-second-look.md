@@ -1,6 +1,6 @@
 # Tony's second look, v0.1.2, 2026-10-20
 
-## Crossings looked like ping-pong (fixed, not yet deployed)
+## Crossings looked like ping-pong (fixed, deployed in v0.1.3)
 
 > *"another new feature looks crazy the channels and pumps pull ions from a great distance and then shoot
 > some at the pump and transporters. looks like ping pong"*
