@@ -67,3 +67,12 @@ Tony's words, from a screenshot of the home page's cell:
 |---|---|
 | The composition does not change, and that is the lesson | Charging this cell to −80 mV moves ~6 million ions, ~1 in 61,000 of its K⁺: no dot or bar can show it. But only the ledger below says so; on the stage nothing happens, so the slider reads as broken. |
 | Proposed (held): show the charge on the stage itself | (1) A charged rim: a thin layer of + on one membrane face and − on the other, density with \|Vm\|, swapping faces as Vm changes sign, labeled as magnified (~10⁵×); every bulk dot stays put. (2) A zoom callout from a patch of the stage's membrane to the ledger, so the ledger reads as a close-up of the main figure. The rim would carry into every later chapter, putting Vm on the cell, not only on the ruler. |
+
+## One channel
+
+> *"one channel creates a torrent way out of proportion to the number of ions we see"*
+
+| item | note |
+|---|---|
+| The torrent is not honest | Charging to −85 mV moves ~6.6 million K⁺, ~1 in 53,000 of the cell's K⁺. At the bulk dot scale (~10¹⁰ ions per dot) that is under a thousandth of one dot: nothing should visibly enter the bath. The stream is a visual flux scale unconnected to the dots, the same defect as on the home page. |
+| Proposed (held): crossings feed the charged rim | The K⁺ that cross do not join the bath's dots; they line up as the + layer on the membrane's outer face, at the rim's labeled magnification (~10⁵×, see Compartments), leaving the − layer inside. Opening the channel builds the rim while every bulk dot stays put; at E_K the net stream stops and a few ions flicker through both ways, equally. Two scales, each labeled and each consistent with the physics: dots for the bulk, rim and crossings for the membrane charge. The ledger's arithmetic becomes the caption. Resolves the home page's torrent the same way. |
