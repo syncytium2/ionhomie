@@ -19,20 +19,20 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 
 | claim | strength | source | commit |
 |---|---|---|---|
-| The chapter arc runs GHK, then rundown, then pumps (on trial) | `decided` | [ADR-0001](adr/0001-the-arc-runs-ghk-then-rundown-then-pumps.md) | COMMIT1 |
-| The learners are graduate and medical students | `decided` | [ADR-0002](adr/0002-the-learners-are-graduate-and-medical-students.md) | COMMIT1 |
-| React, like gaba_excites | `decided` | [ADR-0003](adr/0003-react-like-gaba-excites.md) | COMMIT1 |
-| Two dimensions first | `decided` | [ADR-0005](adr/0005-two-dimensions-first.md) | COMMIT1 |
-| The name is ionhomie; public repo syncytium2/ionhomie | `decided` | [ADR-0007](adr/0007-the-name-is-ionhomie.md) | COMMIT1 |
-| Every page leads with the action; born-on, version and date beside the title | `decided` | [ADR-0008](adr/0008-lead-with-the-action.md) | COMMIT1 |
-| Numbers, notation and ion colors follow the 578 lectures | `decided` | [ADR-0009](adr/0009-numbers-and-colors-follow-the-578-lectures.md) | COMMIT1 |
-| The app: eight chapters and a home page, one hash route each, the action first on every one | `built` | `src/`; `npm run check` passes at 1280 and 390 px | COMMIT1 |
-| The proof-of-principle pages, kept | `built` | `prototype/`; its own checks still pass | COMMIT1 |
-| The lecture's GHK example (1 : 0.02 : 0.5, its concentrations) gives −76.8 mV | `measured` | `src/core/physics.test.ts` | COMMIT1 |
-| The healthy cell is an exact pump–leak steady state at the lecture's Na⁺ 10, K⁺ 140 mM, Ca²⁺ 0.1 µM: Vm −80.3 mV, passive Cl⁻ 5.2 mM, pump current 11.1 pA | `measured` | `src/core/physics.test.ts` | COMMIT1 |
-| Blocking the pump moves Vm at once by 2.6 mV (to −77.8 mV): its direct electrogenic share in this cell | `measured` | `src/core/physics.test.ts` | COMMIT1 |
-| With no pump, after 30 minutes: Na⁺ 114 mM, K⁺ 36 mM, Vm −45 mV, volume 1.09× | `measured` | `src/core/physics.test.ts` | COMMIT1 |
-| KCC2 at 2.48 × 10⁻¹⁶ brings E_Cl to −85 mV; NKCC1 at 2.86 × 10⁻¹⁶ brings it to −36.5 mV and Vm to −59.9 mV | `measured` | `src/core/physics.test.ts` | COMMIT1 |
+| The chapter arc runs GHK, then rundown, then pumps (on trial) | `decided` | [ADR-0001](adr/0001-the-arc-runs-ghk-then-rundown-then-pumps.md) | `98282a8` |
+| The learners are graduate and medical students | `decided` | [ADR-0002](adr/0002-the-learners-are-graduate-and-medical-students.md) | `98282a8` |
+| React, like gaba_excites | `decided` | [ADR-0003](adr/0003-react-like-gaba-excites.md) | `98282a8` |
+| Two dimensions first | `decided` | [ADR-0005](adr/0005-two-dimensions-first.md) | `98282a8` |
+| The name is ionhomie; public repo syncytium2/ionhomie | `decided` | [ADR-0007](adr/0007-the-name-is-ionhomie.md) | `98282a8` |
+| Every page leads with the action; born-on, version and date beside the title | `decided` | [ADR-0008](adr/0008-lead-with-the-action.md) | `98282a8` |
+| Numbers, notation and ion colors follow the 578 lectures | `decided` | [ADR-0009](adr/0009-numbers-and-colors-follow-the-578-lectures.md) | `98282a8` |
+| The app: eight chapters and a home page, one hash route each, the action first on every one | `built` | `src/`; `npm run check` passes at 1280 and 390 px | `98282a8` |
+| The proof-of-principle pages, kept | `built` | `prototype/`; its own checks still pass | `98282a8` |
+| The lecture's GHK example (1 : 0.02 : 0.5, its concentrations) gives −76.8 mV | `measured` | `src/core/physics.test.ts` | `98282a8` |
+| The healthy cell is an exact pump–leak steady state at the lecture's Na⁺ 10, K⁺ 140 mM, Ca²⁺ 0.1 µM: Vm −80.3 mV, passive Cl⁻ 5.2 mM, pump current 11.1 pA | `measured` | `src/core/physics.test.ts` | `98282a8` |
+| Blocking the pump moves Vm at once by 2.6 mV (to −77.8 mV): its direct electrogenic share in this cell | `measured` | `src/core/physics.test.ts` | `98282a8` |
+| With no pump, after 30 minutes: Na⁺ 114 mM, K⁺ 36 mM, Vm −45 mV, volume 1.09× | `measured` | `src/core/physics.test.ts` | `98282a8` |
+| KCC2 at 2.48 × 10⁻¹⁶ brings E_Cl to −85 mV; NKCC1 at 2.86 × 10⁻¹⁶ brings it to −36.5 mV and Vm to −59.9 mV | `measured` | `src/core/physics.test.ts` | `98282a8` |
 
 ## Open
 
