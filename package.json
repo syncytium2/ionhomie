@@ -1,7 +1,7 @@
 {
   "name": "ionhomie",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "ionhomie: a heavily visual browser tool for teaching ion homeostasis, from diffusion to the chloride transporters.",
   "scripts": {
