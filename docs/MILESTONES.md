@@ -43,4 +43,5 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | **Rule on the particles-depict-the-physics decision** ([ADR-0004](adr/0004-the-physics-computes-the-particles-depict.md), proposed) | **Tony** | nothing now; it is how the app is built |
 | **Play through the GHK, rundown and pump chapters in order** and confirm or overturn the chapter arc | **Tony** | settling the arc |
 | **Find and verify the reference numbers not in the lectures**: free-solution diffusion coefficients (K⁺ 1.96, Na⁺ 1.33, Cl⁻ 2.03, Ca²⁺ 0.79 × 10⁻⁹ m²/s); the squid preset and Hodgkin & Katz's (1949) ratio; Na⁺/K⁺-ATPase and PMCA activation constants; a published pump–leak model to check the rundown against. Each goes into `lit/sources.json` | Claude | calling those numbers sourced |
+| **Tony's lesson-by-lesson review**, notes in [`feedback/2026-10-20-first-walkthrough.md`](feedback/2026-10-20-first-walkthrough.md); work held until every lesson has comments | **Tony** | the next round of changes |
 | **A card on tonydefazio.com** for ionhomie, once deployed | Tony | the estate's router |
