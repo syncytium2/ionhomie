@@ -39,3 +39,13 @@ Tony's words, from a screenshot of the home page's cell:
 | A stronger y-axis | Larger tick labels, gridlines at each 20 mV, a heavier axis. |
 | A dramatic zero line | A solid, labeled 0 mV line, perhaps with "inside positive" / "inside negative" shading above and below. |
 | **A teeter-totter for the balance** | The ruler shows *where* Vm sits; a balance would show *why it holds still*. Two candidate uses: (1) in the drift and one-channel chapters, one ion's chemical push against its electrical push, level exactly at E; (2) in GHK, each ion's current as a weight on its side, the beam level when they sum to zero. It could sit beside the ruler rather than replace it. |
+
+## Diffusion
+
+> *"the slowed doesn't work on the jitter, just the diffusion. i assume these are two different
+> sims in parallel?"*
+
+| item | note |
+|---|---|
+| One simulation, not two | The speed setting sets Δt for the one random walk. Each frame every ion steps √(2D·Δt), so slowing the clock 4× slows the spreading 4× but shrinks each frame's step only 2×; and at 60 frames per second each frame is a fresh, independent kick, so the dots buzz however slow the clock. The perception is √t, the chapter's own lesson. |
+| Proposed fix (held) | Sample the walk about 10× per real second and glide each dot between samples, like a lower camera frame rate: true samples, straight paths between, jitter and spreading slowing together. Optionally a readout tying it to √t ("4× slower clock → 2× smaller steps"), and a toggle to show every step. |
