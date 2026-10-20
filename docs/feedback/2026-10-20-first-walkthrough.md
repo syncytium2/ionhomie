@@ -49,3 +49,11 @@ Tony's words, from a screenshot of the home page's cell:
 |---|---|
 | One simulation, not two | The speed setting sets Δt for the one random walk. Each frame every ion steps √(2D·Δt), so slowing the clock 4× slows the spreading 4× but shrinks each frame's step only 2×; and at 60 frames per second each frame is a fresh, independent kick, so the dots buzz however slow the clock. The perception is √t, the chapter's own lesson. |
 | Proposed fix (held) | Sample the walk about 10× per real second and glide each dot between samples, like a lower camera frame rate: true samples, straight paths between, jitter and spreading slowing together. Optionally a readout tying it to √t ("4× slower clock → 2× smaller steps"), and a toggle to show every step. |
+
+## Drift
+
+> *"drift needs the slowing option."*
+
+| item | note |
+|---|---|
+| A speed control, as on the diffusion page | Drift runs at one fixed rate today (`simPerReal = 0.0012`, slowed about 800×, in `src/chapters/Drift.tsx`). Give it the same speed select, and the same sampled-and-glided playback proposed for diffusion so slowing calms the jitter too. Slowed far enough, a student could watch a single ion being pushed by the field. |
