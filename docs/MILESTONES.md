@@ -33,7 +33,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | Blocking the pump moves Vm at once by 2.6 mV (to −77.8 mV): its direct electrogenic share in this cell | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | With no pump, after 30 minutes: Na⁺ 114 mM, K⁺ 36 mM, Vm −45 mV, volume 1.09× | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | Deployed v0.1.1 to https://ionhomie.tonydefazio.com and https://ionhomie.tonydefazio.workers.dev (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | `c7c4555` |
-| Tony's review round built: two stated scales, one-way crossings, the charged rim, the nav bar, the balance, sampled playback | `built` | [ADR-0011](adr/0011-every-dot-and-crossing-is-on-a-stated-scale.md), [0012](adr/0012-a-nav-bar-on-every-page.md), [0013](adr/0013-a-balance-beside-the-ruler.md); `npm run check` | COMMIT2 |
+| Tony's review round built: two stated scales, one-way crossings, the charged rim, the nav bar, the balance, sampled playback | `built` | [ADR-0011](adr/0011-every-dot-and-crossing-is-on-a-stated-scale.md), [0012](adr/0012-a-nav-bar-on-every-page.md), [0013](adr/0013-a-balance-beside-the-ruler.md); `npm run check` | `62da620` |
 | KCC2 at 2.48 × 10⁻¹⁶ brings E_Cl to −85 mV; NKCC1 at 2.86 × 10⁻¹⁶ brings it to −36.5 mV and Vm to −59.9 mV | `measured` | `src/core/physics.test.ts` | `98282a8` |
 
 ## Open
