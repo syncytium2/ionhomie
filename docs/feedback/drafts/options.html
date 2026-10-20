@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#0d1117;color:#e6edf3;font:14px system-ui,sans-serif}
+.fig{width:1200px;padding:18px 22px 22px;box-sizing:border-box}
+h2{margin:0 0 4px;font-size:18px} p{margin:2px 0 10px;color:#9aa5b1;max-width:1100px}
+canvas{display:block;background:#161b22;border:1px solid #2b3442;border-radius:10px}
+</style></head><body>
+<div class="fig" id="f1"><h2>Option 1 — Focus on one ion</h2><p>Tap an ion in the key; the stage redraws that ion alone on its own scale. The dilute side gets a countable handful; the concentrated side, where dots would not fit, becomes a haze with its ratio printed.</p><canvas id="c1" width="1156" height="470"></canvas></div>
+<div class="fig" id="f2"><h2>Option 2 — A census of one cubic micrometer</h2><p>Real counts in a real volume, from the model's concentrations (1 mM = 602,214 ions per µm³). Inside, every free Ca²⁺ is drawn.</p><canvas id="c2" width="1156" height="470"></canvas></div>
+<div class="fig" id="f3"><h2>Option 3 — A magnifier on the membrane</h2><p>A lens on one patch of membrane: a 100 nm cube on each side, one dot per 500 ions. At rest the inside usually holds no free Ca²⁺ at all.</p><canvas id="c3" width="1156" height="470"></canvas></div>
+<script>
+const C={Na:"#ececec",K:"#56b4e9",Cl:"#e8743b",Ca:"#2fbf71",A:"#8a7f6a",mem:"#d9b77e",bath:"#101826",cyto:"#1a1626",mut:"#9aa5b1",txt:"#e6edf3",acc:"#f0e442"};
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+function glyph(x,ion,px,py,r,a=1){x.save();x.globalAlpha=a;x.fillStyle=C[ion];x.strokeStyle=C[ion];
+ if(ion==="Cl"){x.beginPath();x.moveTo(px,py-r*1.25);x.lineTo(px+r*1.25,py);x.lineTo(px,py+r*1.25);x.lineTo(px-r*1.25,py);x.closePath();x.fill();}
+ else if(ion==="A"){x.beginPath();x.ellipse(px,py,r*1.7,r,0,0,7);x.fill();}
+ else{x.beginPath();x.arc(px,py,r,0,7);x.fill();if(ion==="Ca"){x.lineWidth=1.3;x.beginPath();x.arc(px,py,r+2.4,0,7);x.stroke();}}x.restore();}
+function inCircle(cx,cy,R){for(;;){const a=rnd()*6.283,r=R*Math.sqrt(rnd());return[cx+Math.cos(a)*r,cy+Math.sin(a)*r];}}
+function outside(w,h,cx,cy,R,x0=0){for(;;){const px=x0+8+rnd()*(w-16),py=8+rnd()*(h-16);if(Math.hypot(px-cx,py-cy)>R+12)return[px,py];}}
+function cell(x,x0,w,h,R){const cx=x0+w/2,cy=h/2;x.fillStyle=C.bath;x.fillRect(x0,0,w,h);x.fillStyle=C.cyto;x.beginPath();x.arc(cx,cy,R,0,7);x.fill();x.strokeStyle=C.mem;x.lineWidth=8;x.beginPath();x.arc(cx,cy,R,0,7);x.stroke();return[cx,cy];}
+function tag(x,t,px,py,al="left",col=C.mut,f="12px system-ui"){x.font=f;x.textAlign=al;x.textBaseline="middle";const wd=x.measureText(t).width,l=al==="right"?px-wd:al==="center"?px-wd/2:px;x.fillStyle="rgba(13,17,23,.85)";x.fillRect(l-5,py-9,wd+10,18);x.fillStyle=col;x.fillText(t,px,py);}
+function chips(x,x0,y,sel){const L=[["All",null],["Na⁺","Na"],["K⁺","K"],["Cl⁻","Cl"],["Ca²⁺","Ca"]];let px=x0;x.font="600 13px system-ui";for(const[l,k]of L){const w=x.measureText(l).width+22;x.fillStyle=k===sel?"#2d3a1f":"#1c2330";x.strokeStyle=k===sel?"#7fb069":"#2b3442";x.beginPath();x.roundRect(px,y,w,26,8);x.fill();x.stroke();x.fillStyle=k?C[k]:C.txt;x.textAlign="left";x.textBaseline="middle";x.fillText(l,px+11,y+13);px+=w+6;}}
+// ---------- option 1 ----------
+(()=>{const cv=document.getElementById("c1"),x=cv.getContext("2d");const W=570,H=470,R=150;
+ function panel(x0,ion,nIn,ratio,inLabel,outLabel,ipdLabel){const[cx,cy]=cell(x,x0,W,H,R);
+  // ghosts of everything else, to keep context
+  for(let i=0;i<260;i++){const[p,q]=outside(W,H,cx,cy,R,x0);glyph(x,["Na","Cl","Na","Cl","K"][i%5],p,q,2.6,.10);}
+  for(let i=0;i<70;i++){const[p,q]=inCircle(cx,cy,R-12);glyph(x,["K","A","K","A","Na"][i%5],p,q,2.6,.10);}
+  const nOut=nIn*ratio*((W*H-Math.PI*R*R)/(Math.PI*R*R));
+  if(nOut>700){ // haze: density too great for dots
+   const g=x.createRadialGradient(cx,cy,R,cx,cy,W*.7);g.addColorStop(0,C[ion]+"55");g.addColorStop(1,C[ion]+"33");
+   x.save();x.beginPath();x.rect(x0,0,W,H);x.moveTo(cx+R+5,cy);x.arc(cx,cy,R+5,0,2*Math.PI,true);x.fillStyle=g;x.fill("evenodd");x.restore();
+   for(let i=0;i<2600;i++){const[p,q]=outside(W,H,cx,cy,R,x0);x.fillStyle=C[ion];x.globalAlpha=.5;x.fillRect(p,q,1.4,1.4);}x.globalAlpha=1;
+  } else for(let i=0;i<Math.round(nOut);i++){const[p,q]=outside(W,H,cx,cy,R,x0);glyph(x,ion,p,q,3.8);}
+  for(let i=0;i<nIn;i++){const[p,q]=inCircle(cx,cy,R-14);glyph(x,ion,p,q,4.4);}
+  x.strokeStyle=C.mem;x.lineWidth=8;x.beginPath();x.arc(cx,cy,R,0,7);x.stroke();
+  chips(x,x0+12,10,ion);
+  tag(x,inLabel,cx,cy+R-30,"center",C.txt,"600 13px system-ui");
+  tag(x,outLabel,x0+W-12,H-50,"right",C[ion],"600 13px system-ui");
+  tag(x,ipdLabel,x0+W-12,H-22,"right");}
+ panel(0,"Na",12,14.5,"inside: 12 Na⁺ dots","outside: 14.5× denser, still countable","this view: each Na⁺ dot ≈ 2 billion ions");
+ x.fillStyle="#0d1117";x.fillRect(W,0,16,H);
+ panel(W+16,"Ca",12,25000,"inside: 12 Ca²⁺ dots (0.1 µM)","outside: 25,000× denser, drawn as a haze","this view: each Ca²⁺ dot ≈ 21,000 ions");
+})();
+// ---------- option 2 ----------
+(()=>{const cv=document.getElementById("c2"),x=cv.getContext("2d");x.fillStyle="#161b22";x.fillRect(0,0,1156,470);
+ function cube(ox,oy,s,label,fill){const d=s*.45;x.save();
+  x.fillStyle=fill;x.strokeStyle="#9aa5b1";x.lineWidth=1.5;
+  x.beginPath();x.rect(ox,oy+d,s,s);x.fill();x.stroke();
+  x.beginPath();x.moveTo(ox,oy+d);x.lineTo(ox+d,oy);x.lineTo(ox+s+d,oy);x.lineTo(ox+s,oy+d);x.closePath();x.globalAlpha=.6;x.fill();x.globalAlpha=1;x.stroke();
+  x.beginPath();x.moveTo(ox+s,oy+d);x.lineTo(ox+s+d,oy);x.lineTo(ox+s+d,oy+s);x.lineTo(ox+s,oy+s+d);x.closePath();x.globalAlpha=.45;x.fill();x.globalAlpha=1;x.stroke();
+  x.restore();tag(x,label,ox+s/2,oy+s+d+18,"center",C.txt,"600 14px system-ui");tag(x,"1 µm",ox+s/2,oy+d+s-12,"center");return[ox,oy+d,s];}
+ const[ix,iy,s]=cube(40,40,250,"inside: every free Ca²⁺ in a cubic micrometer",C.cyto);
+ for(let i=0;i<60;i++){glyph(x,"Ca",ix+12+rnd()*(s-24),iy+12+rnd()*(s-40),4.2);}
+ tag(x,"60 Ca²⁺",ix+s/2,iy+20,"center",C.Ca,"700 15px system-ui");
+ const[ox,oy]=cube(440,40,250,"outside: the same volume","#101826");
+ for(let i=0;i<4200;i++){x.fillStyle=C.Ca;x.globalAlpha=.45;x.fillRect(ox+4+rnd()*(s-8),oy+4+rnd()*(s-8),1.3,1.3);}x.globalAlpha=1;
+ tag(x,"1.5 million Ca²⁺ (too many to draw)",ox+s/2,oy+20,"center",C.Ca,"700 15px system-ui");
+ // census table with log bars
+ const rows=[["K⁺","K",140,5],["Na⁺","Na",10,145],["Cl⁻","Cl",5.24,106],["Ca²⁺","Ca",1e-4,2.5]];
+ const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+" million":Math.round(n).toLocaleString("en-US");
+ let ty=70;const tx=830;x.font="600 13px system-ui";x.fillStyle=C.mut;x.textAlign="left";x.fillText("ions in 1 µm³",tx,ty-30);x.fillText("inside",tx+70,ty-10);x.fillText("outside",tx+210,ty-10);
+ const L=v=>Math.max(0,(Math.log10(v)-1)/(8-1))*120;
+ for(const[l,k,ci,co]of rows){const ni=ci*602214,no=co*602214;
+  x.fillStyle=C[k];x.font="600 14px system-ui";x.fillText(l,tx,ty+12);
+  x.fillRect(tx+70,ty,L(ni),8);x.strokeStyle=C[k];x.strokeRect(tx+210,ty,L(no),8);
+  x.font="12px ui-monospace,Menlo,monospace";x.fillStyle=C.txt;x.fillText(fmt(ni),tx+70,ty+24);x.fillStyle=C.mut;x.fillText(fmt(no),tx+210,ty+24);ty+=70;}
+ x.fillStyle=C.mut;x.font="12px system-ui";x.fillText("bars on a log scale: each step is tenfold",tx,ty+4);
+})();
+// ---------- option 3 ----------
+(()=>{const cv=document.getElementById("c3"),x=cv.getContext("2d");x.fillStyle="#161b22";x.fillRect(0,0,1156,470);
+ const W=470,H=470,R=150;const[cx,cy]=cell(x,0,W,H,R);
+ for(let i=0;i<300;i++){const[p,q]=outside(W,H,cx,cy,R);glyph(x,["Na","Cl","Na","Cl","Na","K"][i%6],p,q,3.2,.9);}
+ for(let i=0;i<80;i++){const[p,q]=inCircle(cx,cy,R-12);glyph(x,["K","A","K","A","K","Na","Cl"][i%7],p,q,3.2,.9);}
+ x.strokeStyle=C.mem;x.lineWidth=8;x.beginPath();x.arc(cx,cy,R,0,7);x.stroke();
+ const lx=cx+R,ly=cy,lr=26;x.strokeStyle=C.acc;x.lineWidth=2.5;x.beginPath();x.arc(lx,ly,lr,0,7);x.stroke();
+ // the lens
+ const bx=540,by=25,bw=590,bh=420;x.strokeStyle=C.acc;x.lineWidth=1.5;x.beginPath();x.moveTo(lx+lr*.7,ly-lr*.7);x.lineTo(bx,by);x.moveTo(lx+lr*.7,ly+lr*.7);x.lineTo(bx,by+bh);x.stroke();
+ x.save();x.beginPath();x.roundRect(bx,by,bw,bh,14);x.clip();
+ const mid=bx+bw/2;x.fillStyle=C.cyto;x.fillRect(bx,by,bw/2,bh);x.fillStyle=C.bath;x.fillRect(mid,by,bw/2,bh);
+ x.fillStyle=C.mem;x.fillRect(mid-9,by,18,bh);
+ const sideIn=[["K",168],["Na",12],["Cl",6],["A",150]],sideOut=[["Na",174],["Cl",128],["K",6],["Ca",3]];
+ for(const[ion,n]of sideIn)for(let i=0;i<n;i++)glyph(x,ion,bx+14+rnd()*(bw/2-34),by+14+rnd()*(bh-28),ion==="A"?3.4:3.2,.95);
+ for(const[ion,n]of sideOut)for(let i=0;i<n;i++)glyph(x,ion,mid+20+rnd()*(bw/2-34),by+44+rnd()*(bh-110),ion==="Ca"?4.6:3.2,.95);
+ x.restore();x.strokeStyle=C.acc;x.lineWidth=2.5;x.beginPath();x.roundRect(bx,by,bw,bh,14);x.stroke();
+ tag(x,"inside: a 100 nm cube",bx+bw/4,by+18,"center",C.txt,"600 13px system-ui");
+ tag(x,"outside: a 100 nm cube",mid+bw/4,by+18,"center",C.txt,"600 13px system-ui");
+ tag(x,"free Ca²⁺ in this cube: 0",bx+bw/4,by+bh-46,"center",C.Ca,"700 13px system-ui");tag(x,"(0.06 on average: one visits ~6% of the time)",bx+bw/4,by+bh-24,"center",C.Ca,"12px system-ui");
+ tag(x,"3 Ca²⁺ in this cube",mid+bw/4,by+bh-46,"center",C.Ca,"700 13px system-ui");
+ tag(x,"each dot ≈ 500 ions",bx+bw-12,by+bh-14,"right");
+ tag(x,"lens",lx,ly-lr-14,"center",C.acc,"600 12px system-ui");
+})();
+</script></body></html>

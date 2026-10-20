@@ -22,3 +22,15 @@ at most three); a pump or cotransporter cycle runs only when every ion it carrie
 The one-scale stage cannot show this by construction: with ~10¹⁰ ions per dot, inside Ca²⁺ (0.1 µM) is a
 few thousandths of a dot, inside Na⁺ (10 mM) about 3 dots, inside Cl⁻ (5 mM) about 2. Options put to Tony are
 in the session reply of 2026-10-20 and summarized in MILESTONES' open item.
+
+### Draft figures for the three options (2026-10-20)
+
+Static mockups, drawn with the app's colors and glyphs, every count from the model's concentrations
+([`drafts/options.html`](drafts/options.html) draws them):
+
+1. **Focus on one ion** ([png](drafts/option_1.png)): Na⁺ (inside 12 dots, outside 14.5× denser, still
+   countable) beside Ca²⁺ (inside 12 dots at 0.1 µM, each ≈ 21,000 ions; outside 25,000× denser, a haze).
+2. **A census of one cubic micrometer** ([png](drafts/option_2.png)): every free Ca²⁺ in 1 µm³ inside,
+   drawn: 60. Outside, 1.5 million. Counts for every ion on a log scale.
+3. **A magnifier on the membrane** ([png](drafts/option_3.png)): a 100 nm cube on each side at one dot per
+   500 ions: inside, K⁺ 168, Na⁺ 12, Cl⁻ 6 and no free Ca²⁺ (0.06 on average); outside, 3 Ca²⁺.
