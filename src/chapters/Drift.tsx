@@ -101,7 +101,7 @@ function engine() {
     plate(W - pad + 4, -Math.sign(dV));
     const sx = (W - 2 * pad) / L, sy = Hp / H;
     const f = everyFrame ? 1 : Math.min(1, sampleAcc / SAMPLE);
-    for (const p of parts) glyph(ctx, p.s.ion, pad + (p.px + (p.x - p.px) * f) * sx, (p.py + (p.y - p.py) * f) * sy, p.s.ion === "Ca" ? 3 : 3.4, 0.9);
+    for (const p of parts) glyph(ctx, p.s.ion, pad + (p.px + (p.x - p.px) * f) * sx, (p.py + (p.y - p.py) * f) * sy, p.s.ion === "Ca" ? 2.3 : 2.6, 0.95);
   }
 
   function drawProfile(P: Partial<Record<Species, Prof>>) {

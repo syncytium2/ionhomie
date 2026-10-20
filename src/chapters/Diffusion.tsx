@@ -79,7 +79,7 @@ function engine() {
     ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, W, Hp);
     const sx = W / L, sy = Hp / H;
     const f = everyFrame ? 1 : Math.min(1, sampleAcc / SAMPLE);
-    for (const p of parts) glyph(ctx, ion, (p.px + (p.x - p.px) * f) * sx, (p.py + (p.y - p.py) * f) * sy, 3.2, 0.9);
+    for (const p of parts) glyph(ctx, ion, (p.px + (p.x - p.px) * f) * sx, (p.py + (p.y - p.py) * f) * sy, 2.4, 0.95);
     if (!lifted) { ctx.fillStyle = cssVar("--muted"); ctx.fillRect(W / 2 - 2, 0, 4, Hp); }
     else { ctx.setLineDash([3, 5]); ctx.strokeStyle = cssVar("--line"); ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, Hp); ctx.stroke(); ctx.setLineDash([]); }
     if (lifted) {

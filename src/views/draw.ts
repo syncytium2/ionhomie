@@ -632,7 +632,7 @@ export class CellStage {
     const { ctx } = fit(this.c, this.o.height);
     ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, g.w, g.h);
     ctx.fillStyle = "#1a1626"; ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.fill();
-    for (const q of this.parts) if (!q.busy) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? 4.4 : 3.8, Math.max(0, q.a) * 0.92);
+    for (const q of this.parts) if (!q.busy) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? 3.4 : 2.8, Math.max(0, q.a) * 0.95);
     ctx.strokeStyle = cssVar("--membrane"); ctx.lineWidth = 8; ctx.globalAlpha = 0.9;
     ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.stroke(); ctx.globalAlpha = 1;
     this.drawRim(ctx, g);
@@ -643,7 +643,7 @@ export class CellStage {
       if (m.rim) {
         ctx.save(); ctx.globalAlpha = m.t > 0.85 ? (1 - m.t) / 0.15 : 1;
         ctx.strokeStyle = color(m.ion); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, 2 * Math.PI); ctx.stroke(); ctx.restore();
-      } else glyph(ctx, m.ion, x, y, 4.6, 1);
+      } else glyph(ctx, m.ion, x, y, 3.6, 1);
     }
     this.drawScale(ctx, g);
   }
