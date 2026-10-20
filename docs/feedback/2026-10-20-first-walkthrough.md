@@ -57,3 +57,13 @@ Tony's words, from a screenshot of the home page's cell:
 | item | note |
 |---|---|
 | A speed control, as on the diffusion page | Drift runs at one fixed rate today (`simPerReal = 0.0012`, slowed about 800×, in `src/chapters/Drift.tsx`). Give it the same speed select, and the same sampled-and-glided playback proposed for diffusion so slowing calms the jitter too. Slowed far enough, a student could watch a single ion being pushed by the field. |
+
+## Compartments
+
+> *"changing the charge doesn't appear to change the ion composition?. am i missing the point? i
+> wonder if we need a way to show the charng on the membrane in the primary figure for clarity"*
+
+| item | note |
+|---|---|
+| The composition does not change, and that is the lesson | Charging this cell to −80 mV moves ~6 million ions, ~1 in 61,000 of its K⁺: no dot or bar can show it. But only the ledger below says so; on the stage nothing happens, so the slider reads as broken. |
+| Proposed (held): show the charge on the stage itself | (1) A charged rim: a thin layer of + on one membrane face and − on the other, density with \|Vm\|, swapping faces as Vm changes sign, labeled as magnified (~10⁵×); every bulk dot stays put. (2) A zoom callout from a patch of the stage's membrane to the ledger, so the ledger reads as a close-up of the main figure. The rim would carry into every later chapter, putting Vm on the cell, not only on the ruler. |
