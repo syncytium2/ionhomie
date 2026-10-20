@@ -1,0 +1,30 @@
+{
+  "name": "ionhomie",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ionhomie: a heavily visual browser tool for teaching ion homeostasis, from diffusion to the chloride transporters.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4174 --strictPort",
+    "test": "vitest run",
+    "check": "bash scripts/check.sh",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "playwright-core": "1.62.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3",
+    "vitest": "^2.1.9",
+    "wrangler": "^4.136.0"
+  }
+}

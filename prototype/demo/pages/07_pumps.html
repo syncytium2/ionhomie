@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--@head-->
+</head>
+<body>
+<!--@top-->
+<p class="lede">The fix for rundown is a machine that carries ions back up their gradients, paid for with ATP. The
+Na⁺/K⁺-ATPase moves 3 Na⁺ out and 2 K⁺ in for each ATP it splits. Running exactly as fast as the leaks run, it
+holds every concentration still: the pump–leak steady state. Here is the healthy cell again, pump running.</p>
+<div class="predict"><b>Predict first.</b> Block the pump with ouabain. Does Vm jump, creep, or both? The pump moves
+one net charge out per cycle, so part of Vm is its own current. How big a part?</div>
+
+<div class="grid">
+  <div class="panel">
+    <canvas id="stage"></canvas>
+    <div class="controls">
+      <button id="run">Start the clock</button>
+      <label>Speed <select id="speed"><option value="60">1 minute per second</option><option value="300" selected>5 minutes per second</option><option value="1800">30 minutes per second</option></select></label>
+      <button id="reset">Reset</button>
+    </div>
+    <div class="controls">
+      <button id="ouabain" class="danger">Ouabain: block the pump</button>
+      <label>Pump capacity <input type="range" id="pump-frac" min="0" max="100" step="5" value="100"><output id="pump-frac-o">100 %</output></label>
+    </div>
+    <div class="controls">
+      <label>Bath K⁺ <input type="range" id="bath-k" min="2" max="12" step="0.5" value="5"><output id="bath-k-o">5.0 mM</output></label>
+      <button id="pmca" class="on">PMCA running</button>
+    </div>
+    <div class="readouts">
+      <div class="readout"><div class="k">time</div><div class="v" id="r-time">—</div></div>
+      <div class="readout"><div class="k">Vm</div><div class="v vm" id="r-v">—</div></div>
+      <div class="readout"><div class="k">pump current</div><div class="v" id="r-ip">—</div></div>
+      <div class="readout"><div class="k">ATP split per second</div><div class="v" id="r-atp">—</div></div>
+      <div class="readout"><div class="k">the pump's direct share of Vm</div><div class="v" id="r-share">—</div></div>
+      <div class="readout"><div class="k">cell volume</div><div class="v" id="r-vol">—</div></div>
+      <div class="readout"><div class="k">Na⁺ inside</div><div class="v ion-na" id="r-na">—</div></div>
+      <div class="readout"><div class="k">K⁺ inside</div><div class="v ion-k" id="r-k">—</div></div>
+      <div class="readout"><div class="k">Ca²⁺ inside</div><div class="v ion-ca" id="r-ca">—</div></div>
+    </div>
+  </div>
+  <div class="stack">
+    <div class="panel"><h3>Voltage ruler</h3><canvas id="ruler"></canvas>
+      <p class="src">E_Ca sits near the top of the scale: Ca²⁺ is kept twenty thousand times lower inside than out.</p></div>
+    <div class="panel"><h3>Concentrations</h3><canvas id="gauges"></canvas></div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h3>Membrane potential</h3><canvas id="trace-v"></canvas>
+    <h3>Inside concentrations</h3><canvas id="trace-c"></canvas>
+  </div>
+  <div class="stack">
+    <div class="panel"><h3>Volume</h3><canvas id="trace-vol"></canvas></div>
+    <div class="panel"><h3>Ca²⁺ inside</h3><canvas id="trace-ca"></canvas></div>
+  </div>
+</div>
+
+<h2>What to notice</h2>
+<ul class="notice">
+  <li><b>Block the pump and Vm jumps a few mV at once, then creeps.</b> The jump is the pump's own current, gone:
+  its direct, electrogenic share of Vm. The creep is the gradients running down, as in the last chapter. The pump's
+  real job is the second thing, not the first.</li>
+  <li><b>Wash the ouabain out and the cell recovers.</b> High Na⁺ inside drives the pump faster than at rest; the
+  gradients rebuild and the cell shrinks back as the extra solute and water leave.</li>
+  <li><b>Raise bath K⁺ and Vm depolarizes at once</b>, because E_K moves and K⁺ dominates the resting permeability.
+  That is hyperkalemia's danger to excitable tissue.</li>
+  <li><b>Stop the PMCA and Ca²⁺ climbs</b> toward its own equilibrium, tens of thousands of times higher. It barely
+  touches Vm: there is too little Ca²⁺ permeability at rest. The danger of Ca²⁺ overload is what it does inside the
+  cell, not to the voltage.</li>
+</ul>
+
+<details>
+<summary>Clinical connections</summary>
+<p><b>Digoxin</b> and the other cardiac glycosides partly inhibit the Na⁺/K⁺-ATPase, as ouabain does completely;
+the pump-capacity slider shows a partial block. <b>Hyperkalemia</b> raises extracellular K⁺; the bath K⁺ slider
+shows its first effect, the shift in E_K and Vm. <b>Ischemia</b> takes away the ATP for every pump at once: the
+rundown chapter.</p>
+<p class="src">The cell is generic and its parameters illustrative; this shows mechanisms, not doses or time courses.</p>
+</details>
+
+<details>
+<summary>The model</summary>
+<p>The rundown model plus two pumps. The Na⁺/K⁺-ATPase cycles at a rate set by internal Na⁺ (Hill coefficient 3,
+half-activation 10 mM) and external K⁺ (Hill coefficient 2, half-activation 1.5 mM); each cycle is 3 Na⁺ out,
+2 K⁺ in, one net charge out, one ATP. Its maximum rate is not tuned by hand: it is solved so the healthy cell is an
+exact steady state at Na⁺ 12 mM and K⁺ 140 mM. The PMCA extrudes Ca²⁺ (Hill coefficient 2, half-activation
+0.2 µM), treated as electroneutral; it is solved to hold Ca²⁺ at 0.1 µM. There is no Ca²⁺ buffering, so Ca²⁺
+changes here far faster than in a real cell, where most of it is bound.</p>
+</details>
+
+<!--@scripts-->
+<!--@lab-->
+<script>
+(() => {
+  const $ = Views.$;
+  let ouabain = false, frac = 1;
+  const lab = new CellLab.Lab({ pump: true, ca: true, speed: 300, ions: ["Na", "K", "Cl", "A"],
+    onReset: () => { ouabain = false; frac = 1; $("pump-frac").value = 100; $("pump-frac-o").textContent = "100 %"; $("bath-k").value = 5; $("bath-k-o").textContent = "5.0 mM"; labels(); } });
+  lab.controls();
+  function applyPump() {
+    lab.cell.pump.on = !ouabain;
+    lab.cell.pump.imax = lab.pumpFull * frac;
+    lab.pathways();
+  }
+  function labels() {
+    $("ouabain").textContent = ouabain ? "Wash out the ouabain" : "Ouabain: block the pump";
+    $("ouabain").classList.toggle("on", ouabain);
+    $("pmca").textContent = lab.cell.pmca.on ? "PMCA running" : "PMCA stopped";
+    $("pmca").classList.toggle("on", lab.cell.pmca.on);
+  }
+  $("ouabain").onclick = () => { ouabain = !ouabain; applyPump(); labels(); if (!lab.running) { lab.running = true; lab.labelRun(); } };
+  $("pump-frac").oninput = (e) => { frac = +e.target.value / 100; $("pump-frac-o").textContent = e.target.value + " %"; applyPump(); };
+  $("bath-k").oninput = (e) => {
+    const k = +e.target.value;
+    lab.bath.K = k; lab.bath.Cl = Ions.BATH.Cl + (k - Ions.BATH.K);    // added as KCl, so the bath stays neutral
+    $("bath-k-o").textContent = k.toFixed(1) + " mM";
+    lab.s = Ions.snapshot(lab.cell, lab.n, lab.bath);
+  };
+  $("pmca").onclick = () => { lab.cell.pmca.on = !lab.cell.pmca.on; lab.pathways(); labels(); };
+  labels();
+
+  Views.loop((dt) => {
+    lab.advance(dt);
+    lab.draw(dt, ["Na", "K", "Cl", "Ca"]);
+    const s = lab.s;
+    Views.setText("r-ip", (s.pump * Ions.F * 1e12).toFixed(1) + " pA");
+    Views.setText("r-atp", Views.fmtBig(s.pump * 6.022e23));
+    const off = { ...lab.cell, pump: { ...lab.cell.pump, on: false } };
+    const share = (s.V - Ions.snapshot(off, lab.n, lab.bath).V) * 1000;
+    Views.setText("r-share", Views.fmtMv(share));
+  });
+})();
+</script>
+</body>
+</html>

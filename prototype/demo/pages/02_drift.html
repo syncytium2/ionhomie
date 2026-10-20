@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--@head-->
+</head>
+<body>
+<!--@top-->
+<p class="lede">Now put a voltage across the box. Water still jostles every ion at random, but a charged ion also
+feels a steady push from the field: cations toward the negative side, anions toward the positive. A neutral
+molecule feels nothing.</p>
+<div class="predict"><b>Predict first.</b> With the left side positive, where do K⁺ and Cl⁻ pile up? What does the
+neutral molecule do? And Ca²⁺, with twice the charge: the same pile-up as K⁺, a steeper one, or a shallower one?</div>
+
+<div class="grid">
+  <div class="panel">
+    <canvas id="stage"></canvas>
+    <div class="controls">
+      <label>Left side relative to right <input type="range" id="dv" min="-120" max="120" step="5" value="60"><output id="dv-o">60 mV</output></label>
+      <button id="reset">Mix again</button>
+    </div>
+    <p class="src">The box is 2 µm across, slowed about 800×. The plates hold the voltage you set.</p>
+    <div class="controls" id="species"></div>
+  </div>
+  <div class="stack">
+    <div class="panel">
+      <h3>Read the voltage back from the ions</h3>
+      <p class="src">Fit each species' pile-up and ask what voltage would hold exactly that gradient. That is the
+      Nernst equation, run backward.</p>
+      <table id="readback"></table>
+    </div>
+    <div class="panel">
+      <h3>Two fluxes, for <span id="focus-name">K⁺</span></h3>
+      <canvas id="fluxes"></canvas>
+      <p class="src">Through the middle of the box: drift, pushed by the field, and diffusion, pushed back down the
+      gradient that drift builds. The pile-up stops growing when they cancel. Zero net flux is the whole of the
+      Nernst equation.</p>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Concentration across the box</h3>
+  <canvas id="profile"></canvas>
+  <p class="src">Lines: the particles, counted in slices and smoothed. Dashed: the Boltzmann prediction,
+  c(x) ∝ exp(−zFφ(x)/RT), each scaled to its own mean.</p>
+</div>
+
+<details>
+<summary>The math: from drift and diffusion to Nernst</summary>
+<p>The Nernst–Planck equation adds drift in the field to Fick's diffusion:</p>
+<div class="eq">J = −D ( dc/dx + (zF/RT) · c · dφ/dx )</div>
+<p>Set J = 0 and integrate across the box:</p>
+<div class="eq">ln(c_right / c_left) = (zF/RT) · (φ_left − φ_right)
+φ_left − φ_right = (RT/zF) · ln(c_right / c_left)        ← the Nernst equation</div>
+<p>At 37 °C, RT/F = <span id="rtf"></span>. A tenfold gradient of a monovalent ion balances about 61 mV;
+for Ca²⁺, with z = 2, half that.</p>
+<p class="src">One simplification: in a real solution, piling up charge like this would build its own field at
+once, and that field would stop the pile-up almost before it began. These ions are treated as dilute test charges
+in a field set from outside. The compartment chapters put that self-field back, as the charge on the membrane.</p>
+</details>
+
+<!--@scripts-->
+<script>
+(() => {
+  const $ = Views.$;
+  const L = 2e-6, H = 1.2e-6, PER = 380, BINS = 30, simPerReal = 0.0012;
+  const SPECIES = [
+    { ion: "K", z: 1, D: Ions.D_FREE.K, on: true, name: "K⁺" },
+    { ion: "Cl", z: -1, D: Ions.D_FREE.Cl, on: true, name: "Cl⁻" },
+    { ion: "Ca", z: 2, D: Ions.D_FREE.Ca, on: false, name: "Ca²⁺" },
+    { ion: "X", z: 0, D: 0.67e-9, on: true, name: "neutral (glucose-like)" },
+  ];
+  let dV = 0.06, parts = [], focus = "K";
+  const rtf = Ions.rtf();
+  $("rtf").textContent = (rtf * 1000).toFixed(2) + " mV";
+
+  function mix() {
+    parts = [];
+    for (const s of SPECIES) s.bAvg = undefined;
+    for (const s of SPECIES) if (s.on) for (let i = 0; i < PER; i++) parts.push({ s, x: Math.random() * L, y: Math.random() * H });
+  }
+  const box = $("species");
+  for (const s of SPECIES) {
+    const lab = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = s.on;
+    cb.onchange = () => { s.on = cb.checked; mix(); };
+    const rb = document.createElement("input"); rb.type = "radio"; rb.name = "focus"; rb.checked = s.ion === focus; rb.title = "show this species' two fluxes";
+    rb.onchange = () => { focus = s.ion; $("focus-name").textContent = s.name; };
+    lab.append(cb, document.createTextNode(" " + s.name + "  "), rb, document.createTextNode(" fluxes"));
+    if (s.z === 0) lab.replaceChildren(cb, document.createTextNode(" " + s.name));
+    box.append(lab);
+  }
+  $("dv").oninput = (e) => { dV = +e.target.value / 1000; $("dv-o").textContent = Views.fmtMv(+e.target.value, 0); };
+  $("reset").onclick = mix;
+
+  function physics(dtReal) {
+    const dt = dtReal * simPerReal;
+    for (const s of SPECIES) {
+      if (!s.on) continue;
+      const v = (s.z * s.D * dV) / (L * rtf);          // drift velocity: field points left to right when dV > 0
+      const sub = Math.max(1, Math.ceil(Math.sqrt(2 * s.D * dt) / (0.02 * L)));
+      const h = dt / sub, sd = Math.sqrt(2 * s.D * h);
+      for (let k = 0; k < sub; k++) {
+        for (const p of parts) {
+          if (p.s !== s) continue;
+          let x = p.x + v * h + Views.gauss() * sd, y = p.y + Views.gauss() * sd;
+          if (x < 0) x = -x; if (x > L) x = 2 * L - x;
+          if (y < 0) y = -y; if (y > H) y = 2 * H - y;
+          p.x = x; p.y = y;
+        }
+      }
+    }
+  }
+
+  // histogram per species, normalized to mean 1, and a log-linear fit
+  function profiles() {
+    const res = {};
+    for (const s of SPECIES) {
+      if (!s.on) continue;
+      const h = new Array(BINS).fill(0); let n = 0;
+      for (const p of parts) if (p.s === s) { h[Math.min(BINS - 1, Math.floor((p.x / L) * BINS))]++; n++; }
+      const norm = h.map((c) => (c * BINS) / n);
+      // least squares on ln(c) against x, weighting bins by their counts
+      let sw = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+      h.forEach((c, i) => { if (c < 1) return; const x = ((i + 0.5) / BINS) * L, y = Math.log(c); sw += c; sx += c * x; sy += c * y; sxx += c * x * x; sxy += c * x * y; });
+      const b = (sw * sxy - sx * sy) / (sw * sxx - sx * sx);
+      // smooth the fit over time: noise averages out, a real change still shows within a second
+      s.bAvg = s.bAvg === undefined || !isFinite(s.bAvg) ? b : s.bAvg + 0.08 * (b - s.bAvg);
+      res[s.ion] = { s, norm, b: s.bAvg };
+    }
+    return res;
+  }
+  const predicted = (s, x) => {
+    const k = (s.z * dV) / rtf;                       // φ(x) = dV·(1 − x/L)
+    if (Math.abs(k) < 1e-9) return 1;
+    const c = Math.exp(-k * (1 - x / L));
+    const mean = (Math.exp(-k * 0) - Math.exp(-k)) / k;  // ∫₀¹ e^(−k(1−u)) du
+    return c / mean;
+  };
+
+  function drawStage() {
+    const c = $("stage");
+    const W = c.clientWidth, Hp = Math.round(W * 0.5);
+    const { ctx } = Views.fit(c, Hp);
+    const pad = 26;
+    ctx.fillStyle = "#101826"; ctx.fillRect(pad, 0, W - 2 * pad, Hp);
+    // plates
+    const pos = dV > 0, neg = dV < 0;
+    const plate = (x, sign) => {
+      ctx.fillStyle = sign > 0 ? "#7a3b33" : sign < 0 ? "#2f4f73" : "#333a44";
+      ctx.fillRect(x, 0, pad - 4, Hp);
+      ctx.fillStyle = "#e6edf3"; ctx.font = "700 16px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (let y = 22; y < Hp; y += 34) ctx.fillText(sign > 0 ? "+" : sign < 0 ? "−" : "", x + (pad - 4) / 2, y);
+    };
+    plate(0, pos ? 1 : neg ? -1 : 0);
+    plate(W - pad + 4, pos ? -1 : neg ? 1 : 0);
+    const sx = (W - 2 * pad) / L, sy = Hp / H;
+    for (const p of parts) Views.glyph(ctx, p.s.ion, pad + p.x * sx, p.y * sy, p.s.ion === "Ca" ? 3 : 3.4, 0.9);
+  }
+
+  function drawProfile(P) {
+    const c = $("profile");
+    const { ctx, w, h } = Views.fit(c, 220);
+    const l = 40, r = 10, tp = 10, b = 24;
+    let ymax = 2;
+    for (const k in P) for (const v of P[k].norm) ymax = Math.max(ymax, v);
+    ymax = Math.min(8, Math.ceil(ymax));
+    const X = (f) => l + f * (w - l - r), Y = (v) => tp + (1 - v / ymax) * (h - tp - b);
+    ctx.strokeStyle = Views.cssVar("--line"); ctx.strokeRect(l, tp, w - l - r, h - tp - b);
+    ctx.fillStyle = Views.cssVar("--muted"); ctx.font = "10px ui-monospace, Menlo, monospace"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (let v = 0; v <= ymax; v += ymax > 4 ? 2 : 1) ctx.fillText(String(v), l - 4, Y(v));
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText("left", X(0.03), h - b + 6); ctx.fillText("right", X(0.97), h - b + 6);
+    ctx.save(); ctx.translate(10, tp + (h - tp - b) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText("c / mean", 0, -4); ctx.restore();
+    for (const k in P) {
+      const { s, norm } = P[k];
+      const col = s.ion === "X" ? "#e6edf3" : Views.color(s.ion);
+      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([]);
+      ctx.beginPath();
+      norm.forEach((v, i) => {
+        const vs = (norm[Math.max(0, i - 1)] + 2 * v + norm[Math.min(BINS - 1, i + 1)]) / 4;
+        const x = X((i + 0.5) / BINS);
+        if (i === 0) ctx.moveTo(x, Y(vs)); else ctx.lineTo(x, Y(vs));
+      });
+      ctx.stroke();
+      ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5; ctx.beginPath();
+      for (let i = 0; i <= 100; i++) { const f = i / 100, v = Math.min(ymax * 1.2, predicted(s, f * L)); if (i === 0) ctx.moveTo(X(f), Y(v)); else ctx.lineTo(X(f), Y(v)); }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+
+  function drawReadback(P) {
+    let rows = "<tr><th>ion</th><th>z</th><th>ratio, right ÷ left</th><th>voltage it balances</th></tr>";
+    for (const k in P) {
+      const { s, b } = P[k];
+      const ratio = Math.exp(b * L);
+      const vBack = s.z ? ((rtf / s.z) * Math.log(ratio)) * 1000 : NaN;
+      rows += `<tr><td class="ion-${s.ion.toLowerCase()}">${s.name.split(" ")[0]}</td><td>${s.z > 0 ? "+" + s.z : Views.minus(String(s.z))}</td>` +
+        `<td>${ratio >= 10 || ratio < 0.1 ? ratio.toExponential(1) : ratio.toFixed(2)}</td>` +
+        `<td>${s.z ? Views.fmtMv(vBack, 0) : "none: it feels no field"}</td></tr>`;
+    }
+    rows += `<tr><td colspan="4" class="src">Applied: ${Views.fmtMv(dV * 1000, 0)}. Read back from the particles, every charged species should give the same voltage, within noise.</td></tr>`;
+    const t = $("readback");
+    if (t.innerHTML !== rows) t.innerHTML = rows;
+  }
+
+  function drawFluxes(P) {
+    const c = $("fluxes");
+    const { ctx, w } = Views.fit(c, 120);
+    const f = P[focus];
+    if (!f || f.s.z === 0) { ctx.fillStyle = Views.cssVar("--muted"); ctx.font = "12px system-ui, sans-serif"; ctx.fillText("Choose a charged species that is switched on.", 8, 20); return; }
+    const s = f.s;
+    // per unit concentration at the middle: drift velocity, and −D·d(ln c)/dx
+    const drift = (s.z * s.D * dV) / (L * rtf);
+    const diff = -s.D * f.b;
+    const scale = (w * 0.38) / Math.max(1e-12, Math.abs((s.z * s.D * 0.12) / (L * rtf)));
+    const arrow = (y, v, label, col) => {
+      const len = Math.max(-w * 0.45, Math.min(w * 0.45, v * scale));
+      const x0 = w / 2;
+      ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + len - Math.sign(len) * 8, y); ctx.stroke();
+      if (Math.abs(len) > 6) { ctx.beginPath(); ctx.moveTo(x0 + len, y); ctx.lineTo(x0 + len - Math.sign(len) * 11, y - 7); ctx.lineTo(x0 + len - Math.sign(len) * 11, y + 7); ctx.closePath(); ctx.fill(); }
+      ctx.font = "12px system-ui, sans-serif"; ctx.textAlign = len >= 0 ? "right" : "left"; ctx.fillStyle = Views.cssVar("--text");
+      ctx.fillText(label, len >= 0 ? x0 - 6 : x0 + 6, y + 1);
+    };
+    ctx.strokeStyle = Views.cssVar("--line"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(w / 2, 4); ctx.lineTo(w / 2, 116); ctx.stroke();
+    ctx.textBaseline = "middle";
+    arrow(26, drift, "drift", Views.color(s.ion));
+    arrow(62, diff, "diffusion", "#e6edf3");
+    arrow(98, drift + diff, "net", Views.cssVar("--accent"));
+  }
+
+  mix();
+  let k = 0, P = profiles();
+  Views.loop((dt) => {
+    physics(dt);
+    if (++k % 6 === 0) { P = profiles(); drawReadback(P); }
+    drawStage(); drawProfile(P); drawFluxes(P);
+  });
+})();
+</script>
+</body>
+</html>

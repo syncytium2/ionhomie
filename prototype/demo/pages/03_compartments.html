@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--@head-->
+</head>
+<body>
+<!--@top-->
+<p class="lede">Wrap a membrane around some of the solution and you have a cell: two compartments, each well mixed, each
+with its own concentrations. This cell already has the gradients of a healthy neuron, K⁺ high inside, Na⁺ and Cl⁻
+high outside. Inside it are also large anions that can never cross (A⁻): proteins, nucleic acids, metabolites.</p>
+<p class="lede">For now the membrane is closed. Nothing crosses it. But it can still hold charge, like a capacitor:
+a thin film of excess cations on one face and anions on the other. That film is the membrane potential.</p>
+<div class="predict"><b>Predict first.</b> To charge this membrane to −74 mV, about where a resting neuron sits,
+roughly what fraction of the cell's K⁺ has to cross it: a tenth, a hundredth, or much less?</div>
+
+<div class="grid">
+  <div class="panel">
+    <canvas id="stage"></canvas>
+    <div class="controls">
+      <label>Charge the membrane to <input type="range" id="charge" min="-100" max="100" step="1" value="0"><output id="charge-o">0 mV</output></label>
+    </div>
+    <h3>The charge ledger</h3>
+    <canvas id="ledger"></canvas>
+  </div>
+  <div class="stack">
+    <div class="panel">
+      <h3>Voltage ruler</h3>
+      <canvas id="ruler"></canvas>
+      <p class="src">The gradients already define an equilibrium potential for each ion (the ticks). With the
+      membrane closed, no ion can act on it: the arrows are faint because nothing conducts.</p>
+    </div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h3>Concentrations</h3>
+    <canvas id="gauges"></canvas>
+    <p class="src">Solid bars: inside. Outlined bars: outside. Log scale.</p>
+  </div>
+  <div class="panel">
+    <h3>Each compartment is neutral</h3>
+    <table id="neutral"></table>
+    <p class="src">The bulk of each compartment carries no net charge (electroneutrality). The excess that sets Vm
+    is so small it does not show in these sums at all. Equal osmolarity inside and out means no water moves:
+    remember the trapped A⁻; they will matter.</p>
+  </div>
+</div>
+
+<details>
+<summary>The math: the membrane as a capacitor</summary>
+<div class="eq">Q = C · Vm          C = c_m · area,  c_m ≈ 1 µF/cm²
+ions = Q / e</div>
+<p>For a sphere 10 µm in radius the area is 1.26 × 10⁻⁵ cm², so C ≈ 12.6 pF. Charging it by 100 mV takes
+1.26 pC: about 7.8 million monovalent ions. The cell holds about 3.5 × 10¹¹ K⁺ at 140 mM. The ratio is about
+1 in 45,000.</p>
+<p class="src">These numbers are pinned by the tests in tests/physics.test.js.</p>
+</details>
+
+<!--@scripts-->
+<script>
+(() => {
+  const $ = Views.$;
+  const h = Ions.healthyState();
+  const s = Ions.snapshot(h.cell, h.n);
+  const bath = Ions.BATH;
+  let V = 0;
+  const stage = new Views.CellStage($("stage"), { height: 380, ions: ["Na", "K", "Cl", "A"] });
+  const ci = { Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A };
+  stage.setConcentrations(ci, { Na: bath.Na, K: bath.K, Cl: bath.Cl }, 1);
+  const mv = (v) => v * 1000;
+
+  // electroneutrality and osmolarity, from the model's own numbers
+  const zA = h.cell.zA;
+  const inPos = s.ci.Na + s.ci.K + 2 * s.ci.Ca, inNeg = s.ci.Cl + -zA * s.ci.A;
+  const outPos = bath.Na + bath.K + 2 * bath.Ca, outNeg = bath.Cl + bath.X;
+  const f1 = (x) => x.toFixed(1);
+  $("neutral").innerHTML =
+    "<tr><th></th><th>inside</th><th>outside</th></tr>" +
+    `<tr><td>positive charge</td><td>${f1(inPos)} mM</td><td>${f1(outPos)} mM</td></tr>` +
+    `<tr><td>negative charge</td><td>${f1(inNeg)} mM</td><td>${f1(outNeg)} mM</td></tr>` +
+    `<tr><td>osmolarity</td><td>${f1(s.ci.Na + s.ci.K + s.ci.Cl + s.ci.Ca + s.ci.A)} mOsm</td><td>${f1(Ions.osmolarity(bath))} mOsm</td></tr>` +
+    `<tr><td colspan="3" class="src">Outside, X⁻ (${bath.X} mM) stands for bicarbonate, phosphate and the other anions; A⁻ carries ${Views.minus(zA.toFixed(2))} charges each.</td></tr>`;
+
+  $("charge").oninput = (e) => { V = +e.target.value; $("charge-o").textContent = Views.fmtMv(V, 0); draw(); };
+
+  function draw() {
+    Views.ruler($("ruler"), { V, E: { K: mv(s.E.K), Na: mv(s.E.Na), Cl: mv(s.E.Cl) }, g: { K: 0, Na: 0, Cl: 0 }, min: -110, max: 80, height: 380 });
+    Views.ledger($("ledger"), { V });
+    Views.gauges($("gauges"), { ions: ["Na", "K", "Cl", "A"], ci, co: { Na: bath.Na, K: bath.K, Cl: bath.Cl } });
+  }
+  draw();
+  addEventListener("resize", draw);
+  Views.loop((dt) => { stage.step(dt); stage.draw(); });
+})();
+</script>
+</body>
+</html>

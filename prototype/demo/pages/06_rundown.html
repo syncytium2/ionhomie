@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--@head-->
+</head>
+<body>
+<!--@top-->
+<p class="lede">The last chapter ended on a problem. At rest, with Vm steady, K⁺ still leaks out and Na⁺ still leaks in.
+Here is the healthy cell with its leaks and nothing else: no pump, no transporter, no ATP. Start the clock and
+watch what a steady state does when nobody pays for it.</p>
+<div class="predict"><b>Predict first.</b> Where will Vm end up? Will the gradients disappear completely, or stop
+somewhere? And what will happen to the cell's size? Remember the A⁻ trapped inside.</div>
+
+<div class="grid">
+  <div class="panel">
+    <canvas id="stage"></canvas>
+    <div class="controls">
+      <button id="run">Start the clock</button>
+      <label>Speed <select id="speed"><option value="60">1 minute per second</option><option value="300" selected>5 minutes per second</option><option value="1800">30 minutes per second</option></select></label>
+      <button id="reset">Reset</button>
+    </div>
+    <div class="readouts">
+      <div class="readout"><div class="k">time without a pump</div><div class="v" id="r-time">—</div></div>
+      <div class="readout"><div class="k">Vm</div><div class="v vm" id="r-v">—</div></div>
+      <div class="readout"><div class="k">cell volume</div><div class="v" id="r-vol">—</div></div>
+      <div class="readout"><div class="k">Na⁺ inside</div><div class="v ion-na" id="r-na">—</div></div>
+      <div class="readout"><div class="k">K⁺ inside</div><div class="v ion-k" id="r-k">—</div></div>
+      <div class="readout"><div class="k">Cl⁻ inside</div><div class="v ion-cl" id="r-cl">—</div></div>
+    </div>
+  </div>
+  <div class="stack">
+    <div class="panel"><h3>Voltage ruler</h3><canvas id="ruler"></canvas></div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h3>Membrane potential</h3><canvas id="trace-v"></canvas>
+    <h3>Inside concentrations</h3><canvas id="trace-c"></canvas>
+    <h3>Volume</h3><canvas id="trace-vol"></canvas>
+  </div>
+  <div class="stack">
+    <div class="panel"><h3>Concentrations</h3><canvas id="gauges"></canvas>
+      <p class="src">Solid: inside. Outlined: outside. Log scale.</p></div>
+  </div>
+</div>
+
+<h2>What you just watched</h2>
+<ul class="notice">
+  <li><b>The gradients run down.</b> Na⁺ floods in, K⁺ leaks out, and both equilibrium potentials collapse toward
+  zero, taking Vm with them. In this 10 µm cell the collapse takes tens of minutes; a cell with more membrane per
+  volume, or leakier membrane, goes faster.</li>
+  <li><b>Cl⁻ follows.</b> As Vm depolarizes, Cl⁻ is no longer held out, and it flows in with the Na⁺.</li>
+  <li><b>The cell swells, and does not stop.</b> Na⁺ and Cl⁻ in exceed K⁺ out, and water follows the solute. With
+  impermeant A⁻ trapped inside, no balance is possible: any distribution of the permeable ions that is
+  electrochemically at rest (the Donnan equilibrium) leaves more particles inside than out, so water keeps coming.
+  A real cell would burst; this model does not. The cell drawn above is clamped at a size that still fits.</li>
+</ul>
+
+<details>
+<summary>Clinical connection: ischemia</summary>
+<p>Cut the blood supply and the cell's ATP runs out within minutes, and with it every pump. What follows is this
+page: gradients collapse, neurons depolarize, and cells take up Na⁺, Cl⁻ and water and swell (cytotoxic edema).
+This page shows the mechanism, not the time course of any real tissue: the parameters are illustrative.</p>
+</details>
+
+<details>
+<summary>The model</summary>
+<p>A single compartment with leaks for K⁺, Na⁺ and Cl⁻ (GHK flux equation; P<sub>Na</sub>/P<sub>K</sub> = 0.04,
+P<sub>Cl</sub>/P<sub>K</sub> = 0.1), a fixed bath, and impermeant A⁻ inside. Vm is found at every step as the
+voltage where the net current is zero; it changes far faster than the concentrations do. Water follows instantly,
+so the volume always makes the inside isosmotic with the bath. Concentrations change by the leak fluxes, integrated
+over seconds.</p>
+</details>
+
+<!--@scripts-->
+<!--@lab-->
+<script>
+(() => {
+  const lab = new CellLab.Lab({ pump: true, speed: 300, setup: (cell) => { cell.pump.on = false; cell.pmca.on = false; } });
+  lab.controls();
+  Views.loop((dt) => { lab.advance(dt); lab.draw(dt); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "commonjs",
+  "description": "The proof-of-principle pages (docs/adr/0006). python3 tools/build_demo.py --check && node --test tests/*.test.js && node tools/check_pages.mjs"
+}

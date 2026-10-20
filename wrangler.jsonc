@@ -1,0 +1,16 @@
+{
+  // Cloudflare Workers config, assets-only, the shape gaba_excites, colonel_kernel and no_peak use:
+  // no server script; Cloudflare serves ./dist.
+  //
+  // The custom domain is declared rather than clicked: on `wrangler deploy` Cloudflare creates
+  // the DNS record and binds the hostname. ionhomie.tonydefazio.com is Claude's proposal
+  // (docs/adr/0007); the first deploy waits for Tony's go-ahead (docs/MILESTONES.md).
+  "routes": [{ "pattern": "ionhomie.tonydefazio.com", "custom_domain": true }],
+  "name": "ionhomie",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./dist"
+  }
+}

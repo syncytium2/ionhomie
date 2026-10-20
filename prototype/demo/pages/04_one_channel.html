@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--@head-->
+</head>
+<body>
+<!--@top-->
+<p class="lede">The same cell, gradients and all, sitting at 0 mV: its membrane carries no charge yet. Now put in one
+kind of channel, a pore that passes only one ion. When it opens, that ion runs down its concentration gradient, and
+each ion that crosses carries its charge with it. The charge builds a voltage that pushes back, until push and
+gradient balance. That balance is the drift chapter's zero net flux, now across a membrane.</p>
+<div class="predict"><b>Predict first.</b> Open a K⁺ channel. Which way does Vm go, and where does it stop? Then
+close the channel. Does Vm fall back to zero?</div>
+
+<div class="grid">
+  <div class="panel">
+    <canvas id="stage"></canvas>
+    <div class="controls">
+      <button id="open">Open the channel</button>
+      <label>It passes <select id="ion"><option value="K">K⁺</option><option value="Na">Na⁺</option><option value="Cl">Cl⁻</option></select></label>
+      <label>Channels <input type="range" id="count" min="1" max="10" step="1" value="3"><output id="count-o">3</output></label>
+      <button id="zero">Discharge to 0 mV</button>
+    </div>
+    <h3>Membrane potential</h3>
+    <canvas id="trace"></canvas>
+    <p class="src">Time slowed 200×. Simulated milliseconds on the axis.</p>
+  </div>
+  <div class="stack">
+    <div class="panel">
+      <h3>Voltage ruler</h3>
+      <canvas id="ruler"></canvas>
+    </div>
+    <div class="panel">
+      <div class="readouts">
+        <div class="readout"><div class="k">Vm</div><div class="v vm" id="r-v">—</div></div>
+        <div class="readout"><div class="k" id="r-e-k">E</div><div class="v" id="r-e">—</div></div>
+        <div class="readout"><div class="k">driving force, Vm − E</div><div class="v" id="r-df">—</div></div>
+        <div class="readout"><div class="k">current through the channels</div><div class="v" id="r-i">—</div></div>
+        <div class="readout"><div class="k">time constant, C/g</div><div class="v" id="r-tau">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>The charge ledger</h3>
+  <canvas id="ledger"></canvas>
+  <p class="src">In this chapter the concentrations are held fixed. The ledger is the reason that is a fair
+  approximation: the gauges would not move.</p>
+</div>
+
+<details>
+<summary>The math</summary>
+<p>Each open channel lets its ion through at a rate set by the GHK flux equation. With only one kind of channel,
+the current is zero at exactly one voltage: that ion's Nernst potential.</p>
+<div class="eq">C · dVm/dt = −I_ion(Vm)
+I_ion = 0  ⇔  Vm = E_ion = (RT/zF) · ln([ion]out / [ion]in)</div>
+<p>Close the channel and the current is zero at every voltage: nothing carries charge, so the membrane stays
+charged. A real membrane always has some leak, and leaks are the next chapter.</p>
+</details>
+
+<!--@scripts-->
+<script>
+(() => {
+  const $ = Views.$;
+  const h = Ions.healthyState();
+  const s0 = Ions.snapshot(h.cell, h.n);
+  const ci = { Na: s0.ci.Na, K: s0.ci.K, Cl: s0.ci.Cl }, co = { Na: Ions.BATH.Na, K: Ions.BATH.K, Cl: Ions.BATH.Cl };
+  const { area } = Ions.sphere(10e-6);
+  const cm = 0.01;
+  const P1 = 1.0e-8;                    // one "channel" unit of permeability, m/s; illustrative
+  let ion = "K", open = false, nCh = 3, V = 0, t = 0;
+  const simPerReal = 0.005;             // 5 ms per real second: slowed 200×
+  const mv = (v) => v * 1000;
+  const E = { K: Ions.nernst(1, co.K, ci.K), Na: Ions.nernst(1, co.Na, ci.Na), Cl: Ions.nernst(-1, co.Cl, ci.Cl) };
+
+  const stage = new Views.CellStage($("stage"), { height: 340, ions: ["Na", "K", "Cl", "A"] });
+  stage.setConcentrations({ ...ci, A: s0.ci.A }, co, 1);
+  const trace = new Views.Trace($("trace"), { series: [{ key: "v", color: "--accent", label: "Vm" }], ymin: -100, ymax: 80, yLabel: "mV", window: 0.04, xFmt: (x) => (x * 1000).toFixed(0) + " ms", height: 170, yTicks: [-100, -50, 0, 50] });
+
+  const P = () => ({ [ion]: open ? P1 * nCh : 0 });
+  function setPathways() {
+    stage.setPathways([{ kind: "channel", angle: -Math.PI / 4, ions: [ion], open, label: `${Views.LABEL[ion]} channel${nCh > 1 ? "s" : ""}` }]);
+  }
+  setPathways();
+  $("open").onclick = () => { open = !open; $("open").textContent = open ? "Close the channel" : "Open the channel"; $("open").classList.toggle("on", open); setPathways(); };
+  $("ion").onchange = (e) => { ion = e.target.value; setPathways(); };
+  $("count").oninput = (e) => { nCh = +e.target.value; $("count-o").textContent = nCh; setPathways(); };
+  $("zero").onclick = () => { V = 0; };
+
+  function physics(dtReal) {
+    const dt = dtReal * simPerReal;
+    const n = Math.max(1, Math.ceil(dt / 2e-6));
+    const hh = dt / n;
+    for (let k = 0; k < n; k++) V += Ions.dVdt(P(), V, ci, co, cm) * hh;
+    t += dt;
+  }
+
+  let acc = 0;
+  Views.loop((dt) => {
+    physics(dt);
+    const pp = P();
+    const iDens = Ions.ghkCurrent(pp[ion], Views.Z[ion], V, ci[ion], co[ion]);   // A/m², outward +
+    const I = iDens * area;
+    // tokens: direction of the ion's own movement; rate relative to the largest current this page makes
+    const fluxSign = Math.sign(I) * Views.Z[ion];               // + means the ion moves outward
+    const iMax = Math.abs(Ions.ghkCurrent(P1 * 10, Views.Z[ion], 0, ci[ion], co[ion]) * area) || 1;
+    const rate = Math.min(40, 220 * Math.sqrt(Math.abs(I) / iMax));
+    stage.flow([{ [ion]: fluxSign * rate }], dt);
+    stage.step(dt); stage.draw();
+    acc += dt;
+    if (acc > 0.02) { acc = 0; trace.push(t, { v: mv(V) }); }
+    trace.draw();
+    const g = { K: 0, Na: 0, Cl: 0 }; g[ion] = open ? 0.3 + 0.07 * nCh : 0;
+    Views.ruler($("ruler"), { V: mv(V), E: { K: mv(E.K), Na: mv(E.Na), Cl: mv(E.Cl) }, g, min: -110, max: 80, height: 330 });
+    Views.ledger($("ledger"), { V: mv(V) });
+    Views.setText("r-v", Views.fmtMv(mv(V)));
+    Views.setText("r-e-k", `E for ${Views.LABEL[ion]}`);
+    Views.setText("r-e", Views.fmtMv(mv(E[ion])));
+    Views.setText("r-df", Views.fmtMv(mv(V - E[ion])));
+    Views.setText("r-i", open ? Views.minus((I * 1e12).toFixed(1)) + " pA" + (Math.abs(I) > 1e-13 ? (I > 0 ? " out" : " in") : "") : "0 pA: closed");
+    const gS = Ions.slopeConductance(pp, V, ci, co);
+    Views.setText("r-tau", open && gS > 0 ? (1000 * cm / gS).toFixed(2) + " ms" : "∞: nothing conducts");
+  });
+})();
+</script>
+</body>
+</html>

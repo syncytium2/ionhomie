@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--@head-->
+</head>
+<body>
+<!--@top-->
+<p class="lede">A real membrane is never permeable to just one ion. Give it K⁺, Na⁺ and Cl⁻ channels at once and
+each ion pulls Vm toward its own equilibrium potential, harder the more permeable the membrane is to it. Vm settles
+where the currents cancel: between the ticks, weighted by permeability. That point is given by the
+Goldman–Hodgkin–Katz (GHK) equation.</p>
+<div class="predict"><b>Predict first.</b> At rest a neuron is about 25 times more permeable to K⁺ than to Na⁺.
+Does Vm sit on E_K? If not, how far off? And once Vm has settled, have the ions stopped moving?</div>
+
+<div class="grid">
+  <div class="panel">
+    <canvas id="stage"></canvas>
+    <div class="controls">
+      <label><span>P<sub>Na</sub> / P<sub>K</sub></span> <input type="range" id="pna" min="-3" max="1.5" step="0.01" value="-1.398"><output id="pna-o"></output></label>
+      <label><span>P<sub>Cl</sub> / P<sub>K</sub></span> <input type="range" id="pcl" min="-3" max="0.5" step="0.01" value="-1"><output id="pcl-o"></output></label>
+    </div>
+    <div class="controls">
+      <button id="p-rest">Resting neuron</button>
+      <button id="p-spike">Peak of a spike</button>
+      <label>Concentrations <select id="conc"><option value="mammal">mammalian neuron</option><option value="squid">squid giant axon</option></select></label>
+    </div>
+    <h3>Membrane potential</h3>
+    <canvas id="trace"></canvas>
+  </div>
+  <div class="stack">
+    <div class="panel"><h3>Voltage ruler</h3><canvas id="ruler"></canvas></div>
+    <div class="panel">
+      <h3>Currents at this Vm</h3>
+      <canvas id="bars"></canvas>
+      <p class="src">Each ion's current through its channels. They sum to zero, so Vm holds still, but none of them is
+      zero: K⁺ leaks out and Na⁺ leaks in, continuously.</p>
+    </div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h3>Vm against the permeability ratio</h3>
+    <canvas id="curve"></canvas>
+    <p class="src">The GHK voltage as P<sub>Na</sub>/P<sub>K</sub> sweeps from K⁺-dominated to Na⁺-dominated, with
+    P<sub>Cl</sub>/P<sub>K</sub> as set. The dot is now. Swapping the ratio from about 1:25 to 20:1 is, in outline,
+    what an action potential does.</p>
+  </div>
+  <div class="panel">
+    <h3>Steady, not at equilibrium</h3>
+    <p id="leak-note" class="src"></p>
+  </div>
+</div>
+
+<details>
+<summary>The math</summary>
+<p>Each ion's flux follows the GHK flux equation. Setting the total current to zero gives the GHK voltage
+equation (for monovalent ions; Cl⁻ enters with inside and outside swapped because its charge is negative):</p>
+<div class="eq">        RT     P_K[K]o + P_Na[Na]o + P_Cl[Cl]i
+Vm  =  ── ln ─────────────────────────────────
+        F      P_K[K]i + P_Na[Na]i + P_Cl[Cl]o</div>
+<p>With one permeability set to zero it collapses to the other ions' terms; with only one ion left, it is that ion's
+Nernst equation.</p>
+<p>The zero-current condition says nothing about each ion's flux. At rest, Na⁺ enters and K⁺ leaves without
+stopping. This is a steady state, not an equilibrium, and a steady state with continuing fluxes has to be paid for.
+The next chapter asks what happens if it is not.</p>
+<p class="src">The squid concentrations (inside K⁺ 400, Na⁺ 50, Cl⁻ 40 mM; outside K⁺ 20, Na⁺ 440, Cl⁻ 560 mM),
+the squid temperature of 6.3 °C, and Hodgkin and Katz's (1949) resting permeability ratio of 1 : 0.04 : 0.45 are
+recalled, not yet checked against the sources. The squid preset uses them.</p>
+</details>
+
+<!--@scripts-->
+<script>
+(() => {
+  const $ = Views.$;
+  const h = Ions.healthyState();
+  const s0 = Ions.snapshot(h.cell, h.n);
+  const SETS = {
+    mammal: { ci: { K: 140, Na: 12, Cl: s0.ci.Cl }, co: { K: 5, Na: 145, Cl: 110 }, T: Ions.T37, rest: [0.04, 0.1] },
+    squid: { ci: { K: 400, Na: 50, Cl: 40 }, co: { K: 20, Na: 440, Cl: 560 }, T: 273.15 + 6.3, rest: [0.04, 0.45] },
+  };
+  let set = SETS.mammal, rNa = 0.04, rCl = 0.1, V = s0.V, t = 0;
+  const PK = 3e-8, cm = 0.01, simPerReal = 0.005;
+  const { area } = Ions.sphere(10e-6);
+  const mv = (v) => v * 1000;
+
+  const stage = new Views.CellStage($("stage"), { height: 320, ions: ["Na", "K", "Cl", "A"] });
+  const trace = new Views.Trace($("trace"), { series: [{ key: "v", color: "--accent", label: "Vm" }], ymin: -100, ymax: 60, yLabel: "mV", window: 0.06, xFmt: (x) => (x * 1000).toFixed(0) + " ms", height: 150, yTicks: [-100, -50, 0, 50] });
+  stage.setPathways([
+    { kind: "channel", angle: -Math.PI / 3, ions: ["K"], open: true, label: "K⁺" },
+    { kind: "channel", angle: Math.PI / 6, ions: ["Na"], open: true, label: "Na⁺" },
+    { kind: "channel", angle: (2 * Math.PI) / 3, ions: ["Cl"], open: true, label: "Cl⁻" },
+  ]);
+
+  const P = () => ({ K: PK, Na: PK * rNa, Cl: PK * rCl });
+  const E = () => ({ K: Ions.nernst(1, set.co.K, set.ci.K, set.T), Na: Ions.nernst(1, set.co.Na, set.ci.Na, set.T), Cl: Ions.nernst(-1, set.co.Cl, set.ci.Cl, set.T) });
+  const ghk = (rna, rcl) => Ions.ghkVoltage({ K: 1, Na: rna, Cl: rcl }, set.ci, set.co, set.T);
+  const fmtR = (r) => (r >= 1 ? r.toFixed(1) : r >= 0.1 ? r.toFixed(2) : r.toFixed(3));
+  function setRatios(na, cl) {
+    rNa = na; rCl = cl;
+    $("pna").value = Math.log10(na); $("pcl").value = Math.log10(cl);
+    $("pna-o").textContent = fmtR(na); $("pcl-o").textContent = fmtR(cl);
+  }
+  $("pna").oninput = (e) => setRatios(10 ** +e.target.value, rCl);
+  $("pcl").oninput = (e) => setRatios(rNa, 10 ** +e.target.value);
+  $("p-rest").onclick = () => setRatios(set.rest[0], set.rest[1]);
+  $("p-spike").onclick = () => setRatios(20, set.rest[1]);
+  $("conc").onchange = (e) => {
+    set = SETS[e.target.value];
+    setRatios(set.rest[0], set.rest[1]);
+    V = ghk(rNa, rCl);
+    stage.setConcentrations({ ...set.ci, A: e.target.value === "mammal" ? s0.ci.A : set.ci.K + set.ci.Na - set.ci.Cl }, set.co, 1);
+    trace.clear();
+  };
+  stage.setConcentrations({ ...set.ci, A: s0.ci.A }, set.co, 1);
+  setRatios(0.04, 0.1);
+
+  function currents(Vv) {
+    const p = P(), out = {};
+    for (const ion of ["K", "Na", "Cl"]) out[ion] = Ions.ghkCurrent(p[ion], Views.Z[ion], Vv, set.ci[ion], set.co[ion], set.T) * area;
+    return out;
+  }
+
+  function drawBars(I) {
+    const { ctx, w } = Views.fit($("bars"), 150);
+    const mid = w / 2, maxI = Math.max(5e-12, ...Object.values(I).map(Math.abs));
+    ctx.strokeStyle = Views.cssVar("--line"); ctx.beginPath(); ctx.moveTo(mid, 4); ctx.lineTo(mid, 120); ctx.stroke();
+    ctx.font = "11px system-ui, sans-serif"; ctx.textBaseline = "middle";
+    ["K", "Na", "Cl"].forEach((ion, i) => {
+      const y = 20 + i * 34, len = (I[ion] / maxI) * (w * 0.42);
+      ctx.fillStyle = Views.color(ion); ctx.fillRect(Math.min(mid, mid + len), y - 8, Math.abs(len), 16);
+      ctx.fillStyle = Views.cssVar("--text"); ctx.textAlign = len >= 0 ? "right" : "left";
+      ctx.fillText(`${Views.LABEL[ion]} ${Views.minus((I[ion] * 1e12).toFixed(1))} pA`, len >= 0 ? mid - 6 : mid + 6, y);
+    });
+    ctx.fillStyle = Views.cssVar("--muted"); ctx.textAlign = "center";
+    ctx.fillText("← inward current        outward current →", mid, 132);
+    const sum = I.K + I.Na + I.Cl;
+    ctx.fillText(`sum: ${Views.minus((sum * 1e12).toFixed(2))} pA`, mid, 146);
+  }
+
+  function drawCurve() {
+    const { ctx, w, h: H } = Views.fit($("curve"), 220);
+    const l = 44, r = 12, tp = 10, b = 26;
+    const lo = -3, hi = 1.5, vmin = -100, vmax = 70;
+    const X = (lg) => l + ((lg - lo) / (hi - lo)) * (w - l - r), Y = (v) => tp + (1 - (v - vmin) / (vmax - vmin)) * (H - tp - b);
+    ctx.strokeStyle = Views.cssVar("--line"); ctx.strokeRect(l, tp, w - l - r, H - tp - b);
+    const e = E();
+    for (const ion of ["K", "Na"]) { ctx.strokeStyle = Views.color(ion); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(l, Y(mv(e[ion]))); ctx.lineTo(w - r, Y(mv(e[ion]))); ctx.stroke(); }
+    ctx.setLineDash([]);
+    ctx.strokeStyle = Views.cssVar("--accent"); ctx.lineWidth = 2; ctx.beginPath();
+    for (let i = 0; i <= 200; i++) { const lg = lo + ((hi - lo) * i) / 200, v = mv(ghk(10 ** lg, rCl)); if (i === 0) ctx.moveTo(X(lg), Y(v)); else ctx.lineTo(X(lg), Y(v)); }
+    ctx.stroke(); ctx.lineWidth = 1;
+    ctx.fillStyle = Views.cssVar("--accent"); ctx.beginPath(); ctx.arc(X(Math.log10(rNa)), Y(mv(ghk(rNa, rCl))), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = Views.cssVar("--muted"); ctx.font = "10px ui-monospace, Menlo, monospace"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (const lg of [-3, -2, -1, 0, 1]) ctx.fillText(lg === 0 ? "1" : "10" + ["⁻³", "⁻²", "⁻¹", "", "¹"][lg + 3], X(lg), H - b + 6);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (const v of [-100, -50, 0, 50]) ctx.fillText(Views.minus(String(v)), l - 4, Y(v));
+    ctx.textAlign = "left"; ctx.fillStyle = Views.color("Na"); ctx.fillText("E_Na", l + 4, Y(mv(e.Na)) - 8);
+    ctx.fillStyle = Views.color("K"); ctx.fillText("E_K", l + 4, Y(mv(e.K)) + 8);
+  }
+
+  let acc = 0;
+  Views.loop((dt) => {
+    const d = dt * simPerReal, n = Math.max(1, Math.ceil(d / 2e-6));
+    for (let k = 0; k < n; k++) V += Ions.dVdt(P(), V, set.ci, set.co, cm) * (d / n);
+    t += d;
+    const I = currents(V);
+    // tokens per channel: direction of the ion's movement, rate on a square-root scale of its current
+    const rate = (ion) => Math.sign(I[ion] * Views.Z[ion]) * Math.min(30, 9 * Math.sqrt(Math.abs(I[ion]) * 1e12));
+    stage.flow([{ K: rate("K") }, { Na: rate("Na") }, { Cl: rate("Cl") }], dt);
+    stage.step(dt); stage.draw();
+    acc += dt; if (acc > 0.02) { acc = 0; trace.push(t, { v: mv(V) }); }
+    trace.draw();
+    const e = E(), tot = 1 + rNa + rCl;
+    Views.ruler($("ruler"), { V: mv(V), E: { K: mv(e.K), Na: mv(e.Na), Cl: mv(e.Cl) }, g: { K: 1 / tot, Na: rNa / tot, Cl: rCl / tot }, min: -110, max: 80, height: 330 });
+    drawBars(I); drawCurve();
+    // the bridge to the next chapter: how long would the K⁺ last?
+    const kOut = I.K / Ions.F;                             // mol/s leaving
+    const vol = Ions.sphere(10e-6).volume, kAmount = set.ci.K * vol;
+    const hours = kAmount / Math.max(1e-30, kOut) / 3600;
+    Views.setText("leak-note", kOut > 0
+      ? `At this Vm, ${Views.fmtBig(kOut * 6.022e23)} K⁺ ions leave the cell every second, and Na⁺ enters at ${Views.fmtBig(Math.max(0, -I.Na / Ions.F) * 6.022e23)} per second. ` +
+        `Nothing in this chapter replaces them. At that rate the cell would lose all its K⁺ in about ${hours < 1 ? (hours * 60).toFixed(0) + " minutes" : hours.toFixed(1) + " hours"}, and long before that its gradients, and with them Vm, would be gone.`
+      : "Vm is above E_K, so K⁺ is not leaving here.");
+  });
+})();
+</script>
+</body>
+</html>

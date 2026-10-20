@@ -1,0 +1,8 @@
+# Cloudflare static-asset response headers (copied to dist/ by Vite).
+# `no-transform` on the HTML stops Cloudflare injecting its analytics beacon at the edge
+# (it once did, silently, to colonel_kernel). The CSP would block it anyway; this stops the
+# request being attempted. HTML only: no-transform also forbids compression.
+/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate, no-transform

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--@head-->
+</head>
+<body>
+<!--@top-->
+<p class="lede">How does a cell come to have, and keep, the ion gradients and membrane potential it has?
+These pages build the answer one mechanism at a time, each kept switched on in the next: diffusion, drift,
+a membrane, one channel, two, the leaks running the cell down, the pump that stops them, and the
+transporters that set chloride.</p>
+<p class="lede">Written for graduate and medical students. Everything runs in this page; nothing is sent anywhere.</p>
+
+<h2>The ions</h2>
+<div class="panel"><canvas id="key"></canvas>
+<p class="src">Color names the ion; shape carries the charge: circles are cations (a double ring for Ca²⁺),
+diamonds are anions, and the large gray shapes are impermeant anions trapped inside the cell (A⁻).</p></div>
+
+<h2>The chapters</h2>
+<!--@chapters-->
+
+<h2>Two views that stay with you</h2>
+<div class="grid">
+  <div class="panel">
+    <h3>The voltage ruler</h3>
+    <p>A tick at each ion's equilibrium potential, a needle at Vm, and an arrow from the needle toward each tick:
+    that ion's driving force, wider when the membrane conducts it better. Every idea from the one-channel chapter
+    on reads off it. This one shows the healthy cell the compartment chapters start from.</p>
+    <h3>The charge ledger</h3>
+    <p>The handful of ions that actually set Vm, magnified, beside the arithmetic that says how few they are.</p>
+    <canvas id="ledger"></canvas>
+  </div>
+  <div class="panel"><canvas id="ruler"></canvas></div>
+</div>
+
+<!--@scripts-->
+<script>
+(() => {
+  const h = Ions.healthyState();
+  const s = Ions.snapshot(h.cell, h.n);
+  const mv = (v) => v * 1000;
+  const g = { K: 1, Na: 0.04, Cl: 0.1 };
+  function draw() {
+    Views.drawKey(Views.$("key"), ["Na", "K", "Cl", "Ca", "A"]);
+    Views.ruler(Views.$("ruler"), { V: mv(s.V), E: { K: mv(s.E.K), Na: mv(s.E.Na), Cl: mv(s.E.Cl) }, g, min: -110, max: 80, height: 400 });
+    Views.ledger(Views.$("ledger"), { V: mv(s.V) });
+  }
+  draw();
+  addEventListener("resize", draw);
+})();
+</script>
+</body>
+</html>

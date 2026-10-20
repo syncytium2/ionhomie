@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--@head-->
+</head>
+<body>
+<!--@top-->
+<p class="lede">No pump moves Cl⁻. In the cell so far it has simply settled wherever Vm put it: E_Cl equal to Vm, a
+passive distribution. Two cotransporters change that, each running on a gradient the Na⁺/K⁺ pump built. NKCC1
+carries 1 Na⁺, 1 K⁺ and 2 Cl⁻ in together, riding the Na⁺ gradient. KCC2 carries 1 K⁺ and 1 Cl⁻ out together,
+riding the K⁺ gradient. Neither moves any net charge.</p>
+<p class="lede">E_Cl matters because GABA<sub>A</sub> receptors are Cl⁻ channels. Where E_Cl sits relative to Vm decides
+whether GABA hyperpolarizes a neuron or depolarizes it.</p>
+<div class="predict"><b>Predict first.</b> Switch on KCC2 alone. How far down can it push E_Cl: as far as you like,
+or is there a floor? Then try NKCC1 alone. Does Vm move much while E_Cl moves?</div>
+
+<div class="grid">
+  <div class="panel">
+    <canvas id="stage"></canvas>
+    <div class="controls">
+      <button id="preset-none">Passive: neither</button>
+      <button id="preset-kcc2">Adult cortex: KCC2</button>
+      <button id="preset-nkcc1">E_GABA of a GnRH neuron: NKCC1</button>
+    </div>
+    <div class="controls">
+      <label>NKCC1 <input type="range" id="nkcc1" min="-19" max="-15.5" step="0.05" value="-19"><output id="nkcc1-o">off</output></label>
+      <label>KCC2 <input type="range" id="kcc2" min="-19" max="-15.5" step="0.05" value="-19"><output id="kcc2-o">off</output></label>
+    </div>
+    <div class="controls">
+      <button id="run">Start the clock</button>
+      <label>Speed <select id="speed"><option value="300">5 minutes per second</option><option value="1800" selected>30 minutes per second</option></select></label>
+      <button id="reset">Reset</button>
+    </div>
+    <div class="readouts">
+      <div class="readout"><div class="k">E_Cl = E_GABA here</div><div class="v ion-cl" id="r-ecl">—</div></div>
+      <div class="readout"><div class="k">Vm</div><div class="v vm" id="r-v">—</div></div>
+      <div class="readout"><div class="k">GABA<sub>A</sub> at this Vm</div><div class="v" id="r-gaba">—</div></div>
+      <div class="readout"><div class="k">Cl⁻ inside</div><div class="v ion-cl" id="r-cl">—</div></div>
+      <div class="readout"><div class="k">cell volume</div><div class="v" id="r-vol">—</div></div>
+      <div class="readout"><div class="k">time</div><div class="v" id="r-time">—</div></div>
+    </div>
+  </div>
+  <div class="stack">
+    <div class="panel"><h3>Voltage ruler</h3><canvas id="ruler"></canvas></div>
+    <div class="panel"><h3>Concentrations</h3><canvas id="gauges"></canvas></div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h3>Vm and E_Cl</h3><canvas id="trace-v"></canvas>
+    <h3>Inside concentrations</h3><canvas id="trace-c"></canvas>
+  </div>
+  <div class="stack">
+    <div class="panel"><h3>Volume</h3><canvas id="trace-vol"></canvas></div>
+  </div>
+</div>
+
+<h2>What to notice</h2>
+<ul class="notice">
+  <li><b>KCC2 has a floor.</b> It pushes Cl⁻ out only while the K⁺ gradient pays for it, so E_Cl can approach E_K
+  but never pass it. That is why adult cortical E_GABA sits between E_K and Vm, around −80 mV.</li>
+  <li><b>NKCC1 loads Cl⁻ above passive</b>, paid for by the Na⁺ gradient, and E_Cl rises above Vm. Opening GABA<sub>A</sub>
+  channels then lets Cl⁻ out, and the cell depolarizes. In this cell, NKCC1 strong enough to bring E_Cl to −36.5 mV,
+  the E_GABA measured in adult mouse GnRH neurons, puts it well above a typical spike threshold.</li>
+  <li><b>Vm hardly moves while E_Cl moves tens of mV.</b> The cotransporters carry no net charge, and Cl⁻ is a small
+  part of the resting permeability. E_Cl is a setting the cell can change without disturbing its resting potential.</li>
+  <li><b>NKCC1 swells the cell</b>: it brings in four ions at a time, and water follows. Cells use exactly this to
+  recover their volume after shrinking.</li>
+  <li><b>Everything here stands on the pump.</b> Block it on the pumps page and both transporters lose the gradients
+  they run on.</li>
+</ul>
+
+<details>
+<summary>The model, and what it does not claim</summary>
+<p>Each cotransporter's rate is proportional to the logarithm of its driving ratio, so it runs forward, stops, or
+reverses exactly as thermodynamics allows:</p>
+<div class="eq">NKCC1 inward ∝ ln( [Na]o[K]o[Cl]o² / [Na]i[K]i[Cl]i² )
+KCC2 outward ∝ ln( [K]i[Cl]i / [K]o[Cl]o )</div>
+<p>E_GABA is taken to equal E_Cl. Real GABA<sub>A</sub> channels also pass some bicarbonate (HCO₃⁻), which pulls E_GABA a
+little positive of E_Cl; this model leaves bicarbonate out.</p>
+<p>The cell is generic. The two presets show what transport could bring this cell to each E_GABA; they do not
+claim what any real neuron expresses. The −36.5 mV figure is the E_GABA measured with gramicidin perforated patch in
+adult mouse GnRH neurons (DeFazio et al. 2002, Mol Endocrinol 16:2872), the recording mode that leaves internal
+Cl⁻ undisturbed. Internal Cl⁻ in those cells was not measured directly, and which transporter sets it there is not
+claimed here.</p>
+</details>
+
+<!--@scripts-->
+<!--@lab-->
+<script>
+(() => {
+  const $ = Views.$;
+  const lab = new CellLab.Lab({ pump: true, ccc: true, speed: 1800, autorun: true, onReset: () => sync() });
+  lab.controls();
+  const fmtL = (v) => (v <= 0 ? "off" : v.toExponential(1).replace("e-", " × 10⁻").replace(/(\d+)$/, (d) => d.split("").map((c) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[c]).join("")));
+  function set(nk, kc) {
+    lab.cell.nkcc1 = nk; lab.cell.kcc2 = kc; lab.pathways(); sync();
+    if (!lab.running) { lab.running = true; lab.labelRun(); }
+  }
+  function sync() {
+    const nk = lab.cell.nkcc1, kc = lab.cell.kcc2;
+    $("nkcc1").value = nk > 0 ? Math.log10(nk) : -19; $("kcc2").value = kc > 0 ? Math.log10(kc) : -19;
+    $("nkcc1-o").textContent = fmtL(nk); $("kcc2-o").textContent = fmtL(kc);
+  }
+  const fromSlider = (v) => (+v <= -18.99 ? 0 : 10 ** +v);
+  $("nkcc1").oninput = (e) => set(fromSlider(e.target.value), lab.cell.kcc2);
+  $("kcc2").oninput = (e) => set(lab.cell.nkcc1, fromSlider(e.target.value));
+  $("preset-none").onclick = () => set(0, 0);
+  $("preset-kcc2").onclick = () => set(Ions.CCC_PRESETS.cortex.nkcc1, Ions.CCC_PRESETS.cortex.kcc2);
+  $("preset-nkcc1").onclick = () => set(Ions.CCC_PRESETS.gnrh.nkcc1, Ions.CCC_PRESETS.gnrh.kcc2);
+  sync();
+
+  Views.loop((dt) => {
+    lab.advance(dt);
+    lab.draw(dt, ["Na", "K", "Cl"]);
+    const s = lab.s, ecl = s.E.Cl * 1000, v = s.V * 1000, df = v - ecl;
+    Views.setText("r-ecl", Views.fmtMv(ecl));
+    const what = Math.abs(df) < 1 ? "shunting: little voltage change"
+      : df < 0 ? `depolarizing, toward ${Views.fmtMv(ecl, 0)}${ecl > -50 ? "; above a typical threshold" : ""}`
+      : `hyperpolarizing, toward ${Views.fmtMv(ecl, 0)}`;
+    Views.setText("r-gaba", what);
+  });
+})();
+</script>
+</body>
+</html>
