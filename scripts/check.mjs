@@ -30,6 +30,7 @@ const ROUTES = {
   rundown: [["click", "#run", 5000]],
   pumps: [["click", "#run", 2500], ["click", "#ouabain", 3000]],
   chloride: [["click", "#preset-nkcc1", 4000]],
+  homeostat: [["click", "#run", 3000]],
 };
 
 const browser = await chromium.launch();

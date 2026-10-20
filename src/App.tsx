@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { CHAPTERS } from "./chapters/index.ts";
 import Home from "./chapters/Home.tsx";
+import Homeostat from "./chapters/Homeostat.tsx";
 import { BORN, UPDATED, VERSION, fmtDate, fmtStamp } from "./version.ts";
 
+// The homeostat is a game, not a chapter: it sits after the reading order, apart (docs/adr/0014).
+const GAME = "homeostat";
 const slugFromHash = () => location.hash.replace(/^#\/?/, "");
 
 /**
  * The nav bar: "ionhomie" with the born-on date and the current version on one line, then every
  * chapter, on every page, the current one marked. Nothing else sits above the action (ADR-0012).
  */
-function NavBar({ index }: { index: number }) {
+function NavBar({ index, slug }: { index: number; slug: string }) {
   const born = BORN === "unborn" ? "not yet committed" : fmtDate(BORN);
   return (
     <nav className="navbar">
@@ -21,12 +24,13 @@ function NavBar({ index }: { index: number }) {
         </span>
       </div>
       <div className="tabs" role="list">
-        <a role="listitem" href="#/" className={index < 0 ? "tab here" : "tab"} aria-current={index < 0 ? "page" : undefined}>Home</a>
+        <a role="listitem" href="#/" className={index < 0 && slug !== GAME ? "tab here" : "tab"} aria-current={index < 0 && slug !== GAME ? "page" : undefined}>Home</a>
         {CHAPTERS.map((c, i) => (
           <a role="listitem" key={c.slug} href={`#/${c.slug}`} className={i === index ? "tab here" : "tab"} aria-current={i === index ? "page" : undefined}>
             <span className="n">{i + 1}</span>{c.title}
           </a>
         ))}
+        <a role="listitem" href={`#/${GAME}`} className={slug === GAME ? "tab play here" : "tab play"} aria-current={slug === GAME ? "page" : undefined}>▶ Homeostat</a>
       </div>
     </nav>
   );
@@ -40,12 +44,14 @@ export default function App() {
     return () => removeEventListener("hashchange", on);
   }, []);
   const index = CHAPTERS.findIndex((c) => c.slug === slug);
-  const C = index >= 0 ? CHAPTERS[index].C : Home;
-  useEffect(() => { document.title = index >= 0 ? `${CHAPTERS[index].title} · ionhomie` : "ionhomie: ion homeostasis, from diffusion to chloride"; }, [index]);
-  useEffect(() => { document.querySelector(".tab.here")?.scrollIntoView({ block: "nearest", inline: "center" }); }, [index]);
+  const C = index >= 0 ? CHAPTERS[index].C : slug === GAME ? Homeostat : Home;
+  useEffect(() => {
+    document.title = index >= 0 ? `${CHAPTERS[index].title} · ionhomie` : slug === GAME ? "Homeostat · ionhomie" : "ionhomie: ion homeostasis, from diffusion to chloride";
+  }, [index, slug]);
+  useEffect(() => { document.querySelector(".tab.here")?.scrollIntoView({ block: "nearest", inline: "center" }); }, [index, slug]);
   return (
     <>
-      <NavBar index={index} />
+      <NavBar index={index} slug={slug} />
       <C key={slug} />
     </>
   );

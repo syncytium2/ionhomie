@@ -146,19 +146,31 @@ const concentrations = (n: Amounts, volume: number): Inside => ({
 });
 const volumeFor = (n: Amounts, bath: Bath) => (n.Na + n.K + n.Cl + n.Ca + n.A) / osmolarity(bath);
 
-/** Net membrane current (A, outward positive) at V: the leaks plus the pump's net charge. */
-export function netCurrent(cell: Cell, V: number, ci: Conc, bath: Bath, area: number) {
+/**
+ * Extra transport imposed from outside the model, mol/s per ion, outward positive: the homeostat's
+ * hand-dragged ions. It is carried in the zero-current solve as well as in the amounts, so an
+ * unbalanced extra flux moves Vm and the leaks pay its charge back, as they do for the pump's.
+ */
+export type Extra = Partial<Conc>;
+const extraCurrent = (extra?: Extra) => {
+  let i = 0;
+  if (extra) for (const ion of IONS) i += ION_Z[ion] * F * (extra[ion] ?? 0);
+  return i;
+};
+
+/** Net membrane current (A, outward positive) at V: the leaks, the pump's net charge, and any extra flux. */
+export function netCurrent(cell: Cell, V: number, ci: Conc, bath: Bath, area: number, extra?: Extra) {
   let i = 0;
   for (const ion of IONS) i += area * ghkCurrent(cell.P[ion], ION_Z[ion], V, ci[ion], bath[ion]);
-  return i + F * pumpRate(cell, ci, bath, area);
+  return i + F * pumpRate(cell, ci, bath, area) + extraCurrent(extra);
 }
 
 /** The Vm at which net current is zero. Current rises monotonically with V, so bisection is safe. */
-export function restingV(cell: Cell, ci: Conc, bath: Bath, area: number) {
+export function restingV(cell: Cell, ci: Conc, bath: Bath, area: number, extra?: Extra) {
   let lo = -0.2, hi = 0.2;
   for (let k = 0; k < 80; k++) {
     const mid = (lo + hi) / 2;
-    if (netCurrent(cell, mid, ci, bath, area) > 0) hi = mid; else lo = mid;
+    if (netCurrent(cell, mid, ci, bath, area, extra) > 0) hi = mid; else lo = mid;
   }
   return (lo + hi) / 2;
 }
@@ -170,11 +182,11 @@ export interface Snapshot {
 }
 
 /** Everything a view wants to draw about the cell right now. */
-export function snapshot(cell: Cell, n: Amounts, bath: Bath = BATH): Snapshot {
+export function snapshot(cell: Cell, n: Amounts, bath: Bath = BATH, extra?: Extra): Snapshot {
   const { area } = sphere(cell.radius);
   const volume = volumeFor(n, bath);
   const ci = concentrations(n, volume);
-  const V = restingV(cell, ci, bath, area);
+  const V = restingV(cell, ci, bath, area, extra);
   const leak = {} as Conc, E = {} as Conc;
   for (const ion of IONS) {
     leak[ion] = area * ghkFlux(cell.P[ion], ION_Z[ion], V, ci[ion], bath[ion]); // mol/s, outward
@@ -185,17 +197,17 @@ export function snapshot(cell: Cell, n: Amounts, bath: Bath = BATH): Snapshot {
   const nkcc1 = nkcc1Rate(cell, ci, bath);
   const kcc2 = kcc2Rate(cell, ci, bath);
   const net: Conc = {
-    Na: leak.Na + 3 * pump - nkcc1,
-    K: leak.K - 2 * pump - nkcc1 + kcc2,
-    Cl: leak.Cl - 2 * nkcc1 + kcc2,
-    Ca: leak.Ca + pmca,
+    Na: leak.Na + 3 * pump - nkcc1 + (extra?.Na ?? 0),
+    K: leak.K - 2 * pump - nkcc1 + kcc2 + (extra?.K ?? 0),
+    Cl: leak.Cl - 2 * nkcc1 + kcc2 + (extra?.Cl ?? 0),
+    Ca: leak.Ca + pmca + (extra?.Ca ?? 0),
   };
   return { V, ci, volume, area, leak, pump, pmca, nkcc1, kcc2, E, net };
 }
 
 /** Advance the cell by dt seconds (forward Euler on amounts; dt of a second or two is stable here). */
-export function step(cell: Cell, n: Amounts, dt: number, bath: Bath = BATH): { n: Amounts; s: Snapshot } {
-  const s = snapshot(cell, n, bath);
+export function step(cell: Cell, n: Amounts, dt: number, bath: Bath = BATH, extra?: Extra): { n: Amounts; s: Snapshot } {
+  const s = snapshot(cell, n, bath, extra);
   return {
     n: {
       Na: Math.max(n.Na - s.net.Na * dt, 1e-30),

@@ -40,6 +40,8 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | Every cell stage has a View: cell, one ion, census of 1 µm³, magnifier; the learner's choice, kept in the browser | `built` | [ADR-0016](adr/0016-the-learner-picks-how-the-stage-shows-concentrations.md); `npm run check` drives every view | `fb444ba` |
 | The tonydefazio.com tile is the home stage, drawn by `node scripts/tile-svg.ts` from the stage's own constants; live there as site 1.11.1 from 5c225e6. **It is a copy**: a change to `scripts/tile-svg.ts` or `src/views/stage-style.ts` that alters its look must be regenerated and sent to the tonydefazio.com session | `built` | `scripts/tile-svg.ts`; tonydefazio.com | `5c225e6` |
 | KCC2 at 2.48 × 10⁻¹⁶ brings E_Cl to −85 mV; NKCC1 at 2.86 × 10⁻¹⁶ brings it to −36.5 mV and Vm to −59.9 mV | `measured` | `src/core/physics.test.ts` | `98282a8` |
+| The homeostat's first level: carry Na⁺ and K⁺ by hand against the leaks; a carry is a flux through the zero-current solve | `built` | [ADR-0014](adr/0014-the-homeostat-is-a-game-beside-the-chapters.md); `src/chapters/Homeostat.tsx`; `npm run check` | (this commit) |
+| A hand moving 3 Na⁺ out for 2 K⁺ in at the pump's rate is exactly the pump; a balanced extra flux leaves Vm alone | `measured` | `src/core/physics.test.ts` | (this commit) |
 
 ## Open
 
@@ -52,3 +54,4 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | **Play through the GHK, rundown and pump chapters in order** and confirm or overturn the chapter arc | **Tony** | settling the arc |
 | **Find and verify the reference numbers not in the lectures**: free-solution diffusion coefficients (K⁺ 1.96, Na⁺ 1.33, Cl⁻ 2.03, Ca²⁺ 0.79 × 10⁻⁹ m²/s); the squid preset and Hodgkin & Katz's (1949) ratio; Na⁺/K⁺-ATPase and PMCA activation constants; a published pump–leak model to check the rundown against. Each goes into `lit/sources.json` | Claude | calling those numbers sourced |
 | **A card on tonydefazio.com** for ionhomie, once deployed | Tony | the estate's router |
+| **Play the homeostat's first level** and rule on the game (ADR-0014): the limits, the clock, and whether the 20 s delivery makes each carry's Vm kick too large | **Tony** | the pump and chloride levels |

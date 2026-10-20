@@ -23,6 +23,23 @@ export class Lab {
   t = 0; running = false; vol0 = 1; pumpFull = 0; ref = 1;
   private lastRec = -1e9;
   labelRun?: () => void;
+  /**
+   * The homeostat's hand: moles a player has dragged across, outward positive, not yet delivered.
+   * Each drag is delivered as a flux decaying over `handTau` seconds of cell time, so its charge goes
+   * through the zero-current solve (physics.ts, Extra) instead of appearing as a jump.
+   */
+  hand: I.Conc = { Na: 0, K: 0, Cl: 0, Ca: 0 };
+  handTau = 20;
+  extra(): I.Extra {
+    const e: I.Extra = {};
+    for (const ion of I.IONS) if (this.hand[ion]) e[ion] = this.hand[ion] / this.handTau;
+    return e;
+  }
+  /** Hand one dragged dot's worth of this ion across (dir +1 out, −1 in), in moles. */
+  give(ion: I.Ion, dir: number) {
+    this.hand[ion] += dir * (this.stage.ionsPerDot() / 6.02214076e23);
+    this.resnap();
+  }
 
   constructor(opts: Partial<LabOpts>) {
     this.o = { pump: true, ca: false, ccc: false, speed: 300, autorun: false, ions: ["Na", "K", "Cl", "A"], stageHeight: 380, ...opts };
@@ -52,6 +69,7 @@ export class Lab {
   reset() {
     const h = I.healthyState();
     this.cell = h.cell; this.n = h.n; this.t = 0; this.lastRec = -1e9;
+    this.hand = { Na: 0, K: 0, Cl: 0, Ca: 0 };
     this.bath = { ...I.BATH };
     this.vol0 = I.sphere(this.cell.radius).volume;
     this.pumpFull = this.cell.pump.imax;
@@ -59,7 +77,7 @@ export class Lab {
     if (this.o.setup) this.o.setup(this.cell, this);
     this.running = this.o.autorun;
     for (const tr of [this.traceV, this.traceC, this.traceVol, this.traceCa]) tr?.clear();
-    this.s = I.snapshot(this.cell, this.n, this.bath);
+    this.s = I.snapshot(this.cell, this.n, this.bath, this.extra());
     this.pathways();
     this.record(true);
   }
@@ -84,7 +102,7 @@ export class Lab {
     this.stage.setPathways(list);
   }
 
-  resnap() { this.s = I.snapshot(this.cell, this.n, this.bath); }
+  resnap() { this.s = I.snapshot(this.cell, this.n, this.bath, this.extra()); }
 
   private record(force: boolean) {
     if (!force && this.t - this.lastRec < Math.max(1, this.o.speed / 40)) return;
@@ -100,7 +118,11 @@ export class Lab {
     if (!this.running) return;
     const total = dtReal * this.o.speed;
     const n = Math.max(1, Math.ceil(total));
-    for (let k = 0; k < n; k++) this.n = I.step(this.cell, this.n, total / n, this.bath).n;
+    for (let k = 0; k < n; k++) {
+      const dt = total / n, e = this.extra();
+      this.n = I.step(this.cell, this.n, dt, this.bath, e).n;
+      for (const ion of I.IONS) if (e[ion]) this.hand[ion] -= e[ion]! * dt;
+    }
     this.t += total;
     this.resnap();
     this.record(false);

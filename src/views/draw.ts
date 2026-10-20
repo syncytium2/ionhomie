@@ -638,6 +638,32 @@ export class CellStage {
     }
     this.moving = this.moving.filter((m) => m.t < 1);
   }
+  // ---- the homeostat's hand: pick up a dot, carry it, let it go ----
+  private held: Particle | null = null;
+  private heldFrom: Where = "in";
+  /** Pick up the nearest free dot of these species within reach of (x, y), in CSS px. */
+  grab(x: number, y: number, ions: Species[], reach = 22) {
+    let best: Particle | null = null, bd = reach;
+    for (const q of this.parts) {
+      if (q.busy || q.dying || !ions.includes(q.ion)) continue;
+      const d = Math.hypot(q.x - x, q.y - y);
+      if (d < bd) { bd = d; best = q; }
+    }
+    if (!best) return null;
+    best.busy = true; this.held = best; this.heldFrom = best.where;
+    return { ion: best.ion, from: best.where };
+  }
+  carry(x: number, y: number) { if (this.held) { this.held.x = x; this.held.y = y; } }
+  /** Let go. Returns the crossing made, or null if the dot did not cross the membrane. */
+  drop(): { ion: Species; dir: number } | null {
+    const q = this.held;
+    if (!q) return null;
+    this.held = null; q.busy = false; q.vx = 0; q.vy = 0;
+    const g = this.geometry(), d = Math.hypot(q.x - g.cx, q.y - g.cy);
+    const to: Where = d > g.R + 4 ? "out" : d < g.R - 4 ? "in" : this.heldFrom;
+    q.where = to;
+    return to === this.heldFrom ? null : { ion: q.ion, dir: to === "out" ? 1 : -1 };
+  }
   private pos(m: Crossing, g: ReturnType<CellStage["geometry"]>) {
     const rIn = g.R - 16 * g.k, rOut = g.R + 16 * g.k;
     const [ax, ay] = this.mouth(m.p, g, m.dir > 0 ? rIn : rOut, m.da);
@@ -679,6 +705,7 @@ export class CellStage {
         ctx.strokeStyle = color(m.ion); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, 2 * Math.PI); ctx.stroke(); ctx.restore();
       } else glyph(ctx, m.ion, x, y, STAGE.crossR, 1);
     }
+    if (this.held) { const q = this.held; glyph(ctx, q.ion, q.x, q.y, 6, 1); } // the homeostat's hand (docs/adr/0014)
     if (focus) this.drawFocusLabels(ctx, g);
     else this.drawScale(ctx, g);
     if (view === "lens") this.drawLens(ctx, g);

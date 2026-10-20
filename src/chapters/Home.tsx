@@ -27,6 +27,7 @@ export default function Home() {
         {CHAPTERS.map((c, i) => (
           <li key={c.slug}><span className="n">{i + 1}</span><a href={`#/${c.slug}`}>{c.title}</a><br /><span>{c.line}</span></li>
         ))}
+        <li><span className="n">▶</span><a href="#/homeostat">Homeostat</a><br /><span>A game: you are the pump. Carry Na⁺ out and K⁺ in by hand, against the leaks.</span></li>
         <li className="later"><b>Sandbox</b><br /><span>Everything unlocked at once. Not built yet.</span></li>
       </ol>
 

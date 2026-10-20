@@ -142,3 +142,22 @@ test("The one-way GHK fluxes add back to the net flux, and are equal at the reve
     close(u.efflux / u.influx, 1, 1e-9, `equal at E, z=${z}`);
   }
 });
+
+test("An extra flux enters the zero-current solve: balanced leaves Vm alone, unbalanced moves it", () => {
+  const h = I.healthyState();
+  const r = I.snapshot(h.cell, h.n).pump; // the healthy pump's cycle rate, mol/s
+  const V0 = I.snapshot(h.cell, h.n).V;
+  close(I.snapshot(h.cell, h.n, I.BATH, { Na: r, K: -r }).V, V0, 1e-9, "1 Na⁺ out for 1 K⁺ in carries no charge");
+  assert.ok(I.snapshot(h.cell, h.n, I.BATH, { Na: r }).V < V0 - 0.001, "Na⁺ out alone hyperpolarizes");
+  assert.ok(I.snapshot(h.cell, h.n, I.BATH, { K: -r }).V > V0 + 0.001, "K⁺ in alone depolarizes");
+});
+
+test("A hand that moves 3 Na⁺ out for 2 K⁺ in at the pump's rate is the pump", () => {
+  const h = I.healthyState();
+  const s0 = I.snapshot(h.cell, h.n);
+  const off = { ...h.cell, pump: { ...h.cell.pump, on: false } };
+  const s = I.snapshot(off, h.n, I.BATH, { Na: 3 * s0.pump, K: -2 * s0.pump });
+  close(s.V, s0.V, 1e-9, "Vm");
+  close(s.net.Na, s0.net.Na, 1e-9 * s0.pump, "Na⁺ as steady as with the pump");
+  close(s.net.K, s0.net.K, 1e-9 * s0.pump, "K⁺ as steady as with the pump");
+});
