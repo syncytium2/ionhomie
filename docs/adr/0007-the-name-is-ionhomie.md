@@ -22,3 +22,6 @@ candidates). Tony chose a name not on that list.
 - `naming.md` stays as the record of the search; its candidates are not used.
 - Deploying creates a DNS record for the subdomain; that step waits for Tony's go-ahead
   (MILESTONES).
+
+*Carried out 2026-10-20: Tony said "deploy"; the site is live at `ionhomie.tonydefazio.com`, the subdomain
+proposed above.*
