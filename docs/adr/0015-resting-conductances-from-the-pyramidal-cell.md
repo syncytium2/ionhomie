@@ -49,3 +49,8 @@ Proposed with it (Claude; to be ruled on when built):
   presets are re-solved and the tests re-pinned in the same change.
 - The homeostat branch also changed `restingV`; whichever lands second rebases.
 - Order (proposed): after the concentration view Tony is choosing.
+
+*Note, 2026-10-20, a constraint on the proposed solver (from the homeostat session, branch `homeostat`): its test
+"Stacked hand carries past ±200 mV…" must keep passing. Carrying Na⁺ out by hand puts the zero of the I–V below
+−200 mV, so a scan over a fixed window around rest would miss it. The scan must widen its range when it finds no
+zero, and still take the most hyperpolarized zero when the Traub channels make the curve non-monotonic.*
