@@ -2,6 +2,8 @@
 // the stage (src/views/draw.ts, and scripts/tile-svg.ts for the tonydefazio.com tile) reads the same
 // values and cannot drift. The ion colors are CSS variables in src/styles.css; the tile script reads
 // them from there.
+// DOWNSTREAM: tonydefazio.com inlines a copy of the tile this feeds (site 1.11.1, from 5c225e6). It does not
+// update itself: if a change here alters the tile's look, regenerate it and tell the tonydefazio.com session.
 /** Bulk dots per mM per 1000 px², inside and out (docs/adr/0011). */
 export const DOT_DENSITY = 0.0062;
 /** Ions of membrane charge per drawn ± (docs/adr/0011). */

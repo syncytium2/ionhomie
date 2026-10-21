@@ -38,6 +38,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | Deployed v0.1.1 to https://ionhomie.tonydefazio.com and https://ionhomie.tonydefazio.workers.dev (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | `c7c4555` |
 | Tony's review round built: two stated scales, one-way crossings, the charged rim, the nav bar, the balance, sampled playback | `built` | [ADR-0011](adr/0011-every-dot-and-crossing-is-on-a-stated-scale.md), [0012](adr/0012-a-nav-bar-on-every-page.md), [0013](adr/0013-a-balance-beside-the-ruler.md); `npm run check` | `62da620` |
 | Every cell stage has a View: cell, one ion, census of 1 µm³, magnifier; the learner's choice, kept in the browser | `built` | [ADR-0016](adr/0016-the-learner-picks-how-the-stage-shows-concentrations.md); `npm run check` drives every view | `fb444ba` |
+| The tonydefazio.com tile is the home stage, drawn by `node scripts/tile-svg.ts` from the stage's own constants; live there as site 1.11.1 from 5c225e6. **It is a copy**: a change to `scripts/tile-svg.ts` or `src/views/stage-style.ts` that alters its look must be regenerated and sent to the tonydefazio.com session | `built` | `scripts/tile-svg.ts`; tonydefazio.com | `5c225e6` |
 | KCC2 at 2.48 × 10⁻¹⁶ brings E_Cl to −85 mV; NKCC1 at 2.86 × 10⁻¹⁶ brings it to −36.5 mV and Vm to −59.9 mV | `measured` | `src/core/physics.test.ts` | `98282a8` |
 
 ## Open
@@ -45,6 +46,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | what | waits on | blocks |
 |---|---|---|
 | **Voltage-dependent resting conductances** ([ADR-0015](adr/0015-resting-conductances-from-the-pyramidal-cell.md)): source decided (the pyramidal cell); the design is proposed, not built | **Tony**, to rule when built; proposed after the concentration view | the "What is the leak?" section and Rin readouts |
+| **Tile label (optional)**: at phone width "K⁺ leak" sits against the tile's top edge; move it down a few px and resend? | **Tony** | a cosmetic tile update |
 | **Rule on the details of ADR-0009**: the exact hues, and moving every number to the lecture's | **Tony** | settling the drawing and the presets |
 | **Rule on the particles-depict-the-physics decision** ([ADR-0004](adr/0004-the-physics-computes-the-particles-depict.md), proposed) | **Tony** | nothing now; it is how the app is built |
 | **Play through the GHK, rundown and pump chapters in order** and confirm or overturn the chapter arc | **Tony** | settling the arc |

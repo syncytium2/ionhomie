@@ -7,6 +7,8 @@
 // ion colors read from src/styles.css, so the tile cannot drift from the site.
 // Motion: every crossing is the model's (src/core/physics.ts) one-way flux at the healthy steady state,
 // in proportion to one pump cycle per loop, so the loop is a true steady state.
+// DOWNSTREAM: tonydefazio.com inlines a copy of the tile this feeds (site 1.11.1, from 5c225e6). It does not
+// update itself: if a change here alters the tile's look, regenerate it and tell the tonydefazio.com session.
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import * as I from "../src/core/physics.ts";
