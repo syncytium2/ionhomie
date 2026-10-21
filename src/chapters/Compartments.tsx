@@ -1,6 +1,6 @@
 import * as I from "../core/physics.ts";
 import { $, CellStage, fmtMv, gauges, ledger, loop, minus, ruler, setText } from "../views/draw.ts";
-import { Below, ModelNote, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, useEngine } from "./parts.tsx";
 
 function engine() {
   const h = I.healthyState();
@@ -10,7 +10,7 @@ function engine() {
   let V = 0;
   const stage = new CellStage($<HTMLCanvasElement>("stage"), { height: 380, ions: ["Na", "K", "Cl", "A"] });
   const ci = { Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A };
-  stage.setConcentrations(ci, { Na: bath.Na, K: bath.K, Cl: bath.Cl }, 1);
+  stage.setConcentrations({ ...ci, Ca: s.ci.Ca }, { Na: bath.Na, K: bath.K, Cl: bath.Cl, Ca: bath.Ca }, 1);
 
   const inPos = s.ci.Na + s.ci.K + 2 * s.ci.Ca, inNeg = s.ci.Cl - h.cell.zA * s.ci.A;
   const outPos = bath.Na + bath.K + 2 * bath.Ca, outNeg = bath.Cl + bath.X;
@@ -42,6 +42,7 @@ export default function Compartments() {
       <div className="grid hero">
         <div className="panel">
           <canvas id="stage" />
+          <ViewPicker />
           <div className="controls">
             <label>Charge the membrane to <input type="range" id="charge" min="-100" max="100" step="1" defaultValue="0" /><output id="charge-o">0 mV</output></label>
           </div>

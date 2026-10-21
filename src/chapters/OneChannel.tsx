@@ -1,6 +1,6 @@
 import * as I from "../core/physics.ts";
 import { $, CellStage, IONS_PER_SIGN, LABEL, Trace, Z, balance, cssVar, color, fmtMv, ledger, loop, minus, ruler, setText } from "../views/draw.ts";
-import { Below, ModelNote, Readout, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, Readout, useEngine } from "./parts.tsx";
 
 type Mono = "K" | "Na" | "Cl";
 
@@ -16,7 +16,7 @@ function engine() {
   const E = { K: I.nernst(1, co.K, ci.K), Na: I.nernst(1, co.Na, ci.Na), Cl: I.nernst(-1, co.Cl, ci.Cl) };
 
   const stage = new CellStage($<HTMLCanvasElement>("stage"), { height: 360, ions: ["Na", "K", "Cl", "A"] });
-  stage.setConcentrations({ ...ci, A: s0.ci.A }, co, 1);
+  stage.setConcentrations({ ...ci, A: s0.ci.A, Ca: s0.ci.Ca }, { ...co, Ca: I.BATH.Ca }, 1);
   const trace = new Trace($<HTMLCanvasElement>("trace"), {
     series: [{ key: "v", color: "--accent", label: "Vm" }], ymin: -100, ymax: 80, yLabel: "mV", window: 0.04,
     xFmt: (x) => (x * 1000).toFixed(0) + " ms", height: 170, yTicks: [-100, -50, 0, 50],
@@ -75,6 +75,7 @@ export default function OneChannel() {
       <div className="grid hero">
         <div className="panel">
           <canvas id="stage" />
+          <ViewPicker />
           <div className="controls">
             <button id="open">Open the channel</button>
             <label>It passes <select id="ion"><option value="K">K⁺</option><option value="Na">Na⁺</option><option value="Cl">Cl⁻</option></select></label>

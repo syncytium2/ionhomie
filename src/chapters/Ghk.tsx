@@ -1,6 +1,6 @@
 import * as I from "../core/physics.ts";
 import { $, CellStage, IONS_PER_SIGN, LABEL, Trace, Z, balance, color, cssVar, fit, fmtBig, fmtMv, loop, minus, ruler, setText } from "../views/draw.ts";
-import { Below, ModelNote, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, useEngine } from "./parts.tsx";
 
 type Mono = "K" | "Na" | "Cl";
 interface ConcSet { ci: I.Monovalent; co: I.Monovalent; T: number; rest: [number, number]; A: number }
@@ -47,7 +47,7 @@ function engine() {
     set = SETS[k];
     setRatios(set.rest[0], set.rest[1]);
     V = ghk(rNa, rCl);
-    stage.setConcentrations({ ...set.ci, A: set.A }, set.co, 1);
+    stage.setConcentrations({ ...set.ci, A: set.A, ...(k === "neuron" ? { Ca: 1e-4 } : {}) }, { ...set.co, ...(k === "neuron" ? { Ca: 2.5 } : {}) }, 1);
     trace.clear();
   };
   $<HTMLSelectElement>("conc").onchange = (e) => useSet((e.target as HTMLSelectElement).value);
@@ -139,6 +139,7 @@ export default function Ghk() {
       <div className="grid hero">
         <div className="panel">
           <canvas id="stage" />
+          <ViewPicker />
           <div className="controls">
             <label><span>p<sub>Na</sub> / p<sub>K</sub></span> <input type="range" id="pna" min="-3" max="1.5" step="0.01" /><output id="pna-o" /></label>
             <label><span>p<sub>Cl</sub> / p<sub>K</sub></span> <input type="range" id="pcl" min="-3" max="0.5" step="0.01" /><output id="pcl-o" /></label>

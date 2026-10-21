@@ -1,7 +1,7 @@
 import * as I from "../core/physics.ts";
 import { $, fmtMv, loop, setText } from "../views/draw.ts";
 import { Lab } from "../views/lab.ts";
-import { Below, ModelNote, Readout, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, Readout, useEngine } from "./parts.tsx";
 import { Clock } from "./Rundown.tsx";
 
 const SUP = "⁰¹²³⁴⁵⁶⁷⁸⁹";
@@ -46,6 +46,7 @@ export default function Chloride() {
       <div className="grid hero">
         <div className="panel">
           <canvas id="stage" />
+          <ViewPicker />
           <div className="controls">
             <button id="preset-none">Passive: neither</button>
             <button id="preset-kcc2">KCC2, as in adult cortex</button>

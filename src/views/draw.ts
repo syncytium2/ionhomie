@@ -414,6 +414,26 @@ export function balance(canvas: HTMLCanvasElement, st: { left: Weight[]; right: 
 
 export const DOT_DENSITY = 0.0062; // dots per mM per 1000 px², inside and out
 export const IONS_PER_SIGN = 1.1e5; // ions of membrane charge per drawn rim sign
+
+// ---------- the stage's view: one choice for every stage, kept in this browser (docs/adr/0016) ----------
+export type StageView = "cell" | "focus" | "census" | "lens";
+export const viewPref: { view: StageView; ion: Species } = { view: "cell", ion: "Ca" };
+const VIEW_KEY = "ionhomie.stageView";
+try {
+  const saved = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
+  if (saved && ["cell", "focus", "census", "lens"].includes(saved.view)) viewPref.view = saved.view;
+  if (saved && ["Na", "K", "Cl", "Ca"].includes(saved.ion)) viewPref.ion = saved.ion;
+} catch { /* storage blocked: the default view */ }
+export function setStageView(view: StageView, ion: Species = viewPref.ion) {
+  viewPref.view = view; viewPref.ion = ion;
+  try { localStorage.setItem(VIEW_KEY, JSON.stringify(viewPref)); } catch { /* not remembered */ }
+}
+/** Ions per cubic micrometer at 1 mM: 1e-18 m³ × 6.022e23 /mol × 1 mol/m³. */
+export const IONS_PER_UM3_PER_MM = 602214;
+interface Dot { where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; ion: Species }
+const seeded = (n: number, seed: number) => { const out: [number, number][] = []; let s0 = seed; const r = () => ((s0 = (s0 * 16807) % 2147483647) / 2147483647); for (let i = 0; i < n; i++) out.push([r(), r()]); return out; };
+const SPECKLE = seeded(2600, 11);
+const FOCUS_HAZE = 1400; // above this many dots on a side, the focus view draws that side as a haze
 const NA = 6.02214076e23;
 
 export interface Pathway {
@@ -438,15 +458,22 @@ export class CellStage {
   V: number | null = null; // mV, for the rim
   thinning = 1; // crossings shown are 1 in this many (the lab sets it at fast clocks)
   private acc = new Map<string, number>();
-  private lastW = 0;
+  private lastKey = "";
+  private vdots: Dot[] = []; // the focus, census and lens views' own dots
+  private vKey = "";
+  private vDens = 0;
+  private caVisit = { n: 0, until: 0 };
+  private clock = 0;
   constructor(private c: HTMLCanvasElement, opts: Partial<StageOpts> = {}) {
     this.o = { height: 420, ions: ["Na", "K", "Cl", "A"], mode: "fixed", cellVolume: (4 / 3) * Math.PI * 1e-15, ...opts };
   }
   geometry() {
     const w = Math.max(50, this.c.clientWidth), h = this.o.height;
-    const R0 = Math.min(w, h) * 0.34;
-    const R = Math.min(R0 * Math.cbrt(Math.max(0.2, this.volumeRel)), Math.min(w, h) * 0.47);
-    return { w, h, cx: w / 2, cy: h / 2, R, R0, k: Math.max(1, Math.min(1.7, R0 / 105)) };
+    const lens = viewPref.view === "lens";
+    // in the magnifier view the cell moves left and shrinks; the lens takes the right
+    const R0 = lens ? Math.min(w * 0.19, h * 0.32) : Math.min(w, h) * 0.34;
+    const R = Math.min(R0 * Math.cbrt(Math.max(0.2, this.volumeRel)), lens ? w * 0.22 : Math.min(w, h) * 0.47);
+    return { w, h, cx: lens ? w * 0.24 : w / 2, cy: h / 2, R, R0, k: Math.max(1, Math.min(1.7, R0 / 105)) };
   }
   /** Ions each bulk dot stands for, at this canvas size. */
   ionsPerDot() {
@@ -550,10 +577,12 @@ export class CellStage {
   step(dt: number) {
     if (!(dt > 0)) return;
     const g = this.geometry();
-    if (Math.abs(g.w - this.lastW) > 2) { // a resize changes the dot scale: start the counts over
-      if (this.lastW) this.parts = [];
-      this.lastW = g.w;
+    const key = `${Math.round(g.w / 3)}|${viewPref.view === "lens"}`;
+    if (key !== this.lastKey) { // a resize or a change of view changes the dot scale: start the counts over
+      if (this.lastKey) { this.parts = []; this.moving = []; }
+      this.lastKey = key;
     }
+    this.stepView(dt, g);
     for (const where of ["in", "out"] as const) {
       for (const ion of this.o.ions) {
         const live = this.parts.filter((q) => q.ion === ion && q.where === where && !q.dying && !q.busy);
@@ -630,22 +659,213 @@ export class CellStage {
   draw() {
     const g = this.geometry();
     const { ctx } = fit(this.c, this.o.height);
+    const view = viewPref.view;
+    if (view === "census") { this.drawCensus(ctx, g); return; }
     ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, g.w, g.h);
     ctx.fillStyle = "#1a1626"; ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.fill();
-    for (const q of this.parts) if (!q.busy) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? 3.4 : 2.8, Math.max(0, q.a) * 0.95);
+    const focus = view === "focus";
+    if (focus) this.drawFocusHaze(ctx, g);
+    for (const q of this.parts) if (!q.busy) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? 3.4 : 2.8, Math.max(0, q.a) * (focus ? 0.1 : 0.95));
+    if (focus) for (const d of this.vdots) glyph(ctx, d.ion, d.x, d.y, 3.4, Math.max(0, d.a));
     ctx.strokeStyle = cssVar("--membrane"); ctx.lineWidth = 8; ctx.globalAlpha = 0.9;
     ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.stroke(); ctx.globalAlpha = 1;
     this.drawRim(ctx, g);
     this.pathways.forEach((pw) => this.drawPathway(ctx, g, pw));
     for (const m of this.moving) {
-      if (m.delay > 0) continue;
+      if (m.delay > 0 || focus) continue; // crossings are at the bulk scale; the focus view has its own
       const [x, y] = this.pos(m, g);
       if (m.rim) {
         ctx.save(); ctx.globalAlpha = m.t > 0.85 ? (1 - m.t) / 0.15 : 1;
         ctx.strokeStyle = color(m.ion); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, 2 * Math.PI); ctx.stroke(); ctx.restore();
       } else glyph(ctx, m.ion, x, y, 3.6, 1);
     }
-    this.drawScale(ctx, g);
+    if (focus) this.drawFocusLabels(ctx, g);
+    else this.drawScale(ctx, g);
+    if (view === "lens") this.drawLens(ctx, g);
+  }
+  // ---------- the three other views (docs/adr/0016) ----------
+  private censusLayout(g: ReturnType<CellStage["geometry"]>) {
+    const narrow = g.w < 640;
+    const s = narrow ? Math.min((g.w - 60) / 2 / 1.45, g.h * 0.26) : Math.min(g.h * 0.5, g.w * 0.19);
+    const d = s * 0.45, y = narrow ? 30 : 46;
+    const inX = 18, outX = inX + s * 1.45 + (narrow ? 14 : 34);
+    return { s, d, y, inX, outX, narrow, tableX: narrow ? 18 : outX + s * 1.45 + 34, tableY: narrow ? y + s + d + 62 : 70 };
+  }
+  private lensLayout(g: ReturnType<CellStage["geometry"]>) {
+    const bx = g.w * 0.47, by = 12, bw = g.w - bx - 10, bh = g.h - 24, mid = bx + bw / 2;
+    return { bx, by, bw, bh, mid, inR: [bx + 8, by + 34, bw / 2 - 22, bh - 84], outR: [mid + 14, by + 34, bw / 2 - 22, bh - 84] };
+  }
+  /** Where a view's dot may sit: a rectangle, or inside / outside the cell. */
+  private region(where: Where, g: ReturnType<CellStage["geometry"]>): number[] | "in" | "out" {
+    const v = viewPref.view;
+    if (v === "census") { const L = this.censusLayout(g); return [L.inX + 6, L.y + L.d + 6, L.s - 12, L.s - 12]; }
+    if (v === "lens") { const L = this.lensLayout(g); return where === "in" ? L.inR : L.outR; }
+    return where;
+  }
+  private focusCounts(g: ReturnType<CellStage["geometry"]>) {
+    const ion = viewPref.ion, ci = this.inside[ion], co = this.outside[ion];
+    if (ci === undefined || co === undefined) return null;
+    if (!this.vDens) this.vDens = 12 / (Math.PI * g.R0 * g.R0 * Math.max(1e-12, Math.min(ci, co))); // the dilute side gets ~12 dots
+    return { ion, ci, co, nIn: ci * Math.PI * g.R * g.R * this.vDens, nOut: co * (g.w * g.h - Math.PI * g.R * g.R) * this.vDens };
+  }
+  private stepView(dt: number, g: ReturnType<CellStage["geometry"]>) {
+    this.clock += dt;
+    const view = viewPref.view, HAZE = FOCUS_HAZE;
+    const key = `${view}|${viewPref.ion}|${Math.round(g.w / 3)}`;
+    if (key !== this.vKey) { this.vKey = key; this.vdots = []; this.vDens = 0; }
+    const targets: { ion: Species; where: Where; n: number }[] = [];
+    if (view === "focus") {
+      const f = this.focusCounts(g);
+      if (f) targets.push({ ion: f.ion, where: "in", n: f.nIn > HAZE ? 0 : Math.round(f.nIn) }, { ion: f.ion, where: "out", n: f.nOut > HAZE ? 0 : Math.round(f.nOut) });
+    } else if (view === "census") {
+      const ca = this.inside.Ca;
+      if (ca !== undefined) { const n = Math.round(ca * IONS_PER_UM3_PER_MM); targets.push({ ion: "Ca", where: "in", n: n > 500 ? 0 : n }); }
+    } else if (view === "lens") {
+      const per = (IONS_PER_UM3_PER_MM * 1e-3) / 500; // dots per mM in a 100 nm cube, at 500 ions a dot
+      for (const ion of ["K", "Na", "Cl", "A"] as Species[]) { const c = this.inside[ion]; if (c !== undefined) targets.push({ ion, where: "in", n: Math.round(c * per) }); }
+      for (const ion of ["Na", "Cl", "K", "Ca"] as Species[]) { const c = this.outside[ion]; if (c !== undefined) targets.push({ ion, where: "out", n: Math.round(c * per) }); }
+      // free Ca²⁺ inside a 100 nm cube: a fraction of one ion on average, so now and then one visits
+      const mu = (this.inside.Ca ?? 0) * IONS_PER_UM3_PER_MM * 1e-3;
+      if (this.clock > this.caVisit.until) {
+        let k = 0, p = Math.exp(-mu), acc = p; const u = Math.random();
+        while (u > acc && k < 50) { k++; p *= mu / k; acc += p; }
+        this.caVisit = { n: k, until: this.clock + 1.5 };
+      }
+    }
+    for (const t of targets) {
+      const live = this.vdots.filter((d) => d.ion === t.ion && d.where === t.where && !d.dying);
+      const diff = t.n - live.length;
+      const n = live.length === 0 ? Math.abs(diff) : Math.max(1, Math.round(Math.abs(diff) * 0.1));
+      const reg = this.region(t.where, g);
+      if (diff > 0) for (let i = 0; i < Math.min(n, diff); i++) {
+        const at = Array.isArray(reg) ? [reg[0] + Math.random() * reg[2], reg[1] + Math.random() * reg[3]] : this.place(reg, g);
+        if (at) this.vdots.push({ ion: t.ion, where: t.where, x: at[0], y: at[1], vx: 0, vy: 0, a: live.length === 0 ? 1 : 0, dying: false });
+      } else if (diff < 0) for (let i = 0; i < Math.min(n, -diff); i++) live[(Math.random() * live.length) | 0].dying = true;
+    }
+    for (const d of this.vdots) {
+      d.vx += (-d.vx / 1.2) * dt + 9 * Math.sqrt(dt) * gauss();
+      d.vy += (-d.vy / 1.2) * dt + 9 * Math.sqrt(dt) * gauss();
+      d.x += d.vx * dt; d.y += d.vy * dt;
+      const reg = this.region(d.where, g);
+      if (Array.isArray(reg)) {
+        if (d.x < reg[0] || d.x > reg[0] + reg[2]) d.vx *= -1;
+        if (d.y < reg[1] || d.y > reg[1] + reg[3]) d.vy *= -1;
+        d.x = Math.max(reg[0], Math.min(reg[0] + reg[2], d.x)); d.y = Math.max(reg[1], Math.min(reg[1] + reg[3], d.y));
+      } else {
+        const r = Math.hypot(d.x - g.cx, d.y - g.cy) || 1;
+        if (reg === "in" && r > g.R - 10) { const k = (g.R - 10) / r; d.x = g.cx + (d.x - g.cx) * k; d.y = g.cy + (d.y - g.cy) * k; d.vx *= -0.5; d.vy *= -0.5; }
+        if (reg === "out") {
+          if (r < g.R + 12) { const k = (g.R + 12) / r; d.x = g.cx + (d.x - g.cx) * k; d.y = g.cy + (d.y - g.cy) * k; d.vx *= -0.5; d.vy *= -0.5; }
+          d.x = Math.max(6, Math.min(g.w - 6, d.x)); d.y = Math.max(6, Math.min(g.h - 6, d.y));
+        }
+      }
+      d.a = d.dying ? d.a - dt * 1.5 : Math.min(1, d.a + dt * 1.5);
+    }
+    this.vdots = this.vdots.filter((d) => !(d.dying && d.a <= 0));
+  }
+  private tag(ctx: CanvasRenderingContext2D, t: string, x: number, y: number, align: CanvasTextAlign, col = cssVar("--muted"), font = "11px system-ui, sans-serif") {
+    ctx.font = font; ctx.textAlign = align; ctx.textBaseline = "middle";
+    const wd = ctx.measureText(t).width, x0 = align === "right" ? x - wd : align === "center" ? x - wd / 2 : x;
+    ctx.fillStyle = "rgba(13,17,23,0.85)"; ctx.fillRect(x0 - 5, y - 9, wd + 10, 18);
+    ctx.fillStyle = col; ctx.fillText(t, x, y);
+  }
+  private haze(ctx: CanvasRenderingContext2D, ion: Species, clip: () => void, box: number[]) {
+    ctx.save(); ctx.beginPath(); clip(); ctx.clip("evenodd");
+    ctx.fillStyle = color(ion); ctx.globalAlpha = 0.2; ctx.fillRect(box[0], box[1], box[2], box[3]);
+    ctx.globalAlpha = 0.55;
+    for (const [u, v] of SPECKLE) ctx.fillRect(box[0] + u * box[2], box[1] + v * box[3], 1.4, 1.4);
+    ctx.restore();
+  }
+  private drawFocusHaze(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
+    const f = this.focusCounts(g);
+    if (!f) return;
+    if (f.nOut > FOCUS_HAZE) this.haze(ctx, f.ion, () => { ctx.rect(0, 0, g.w, g.h); ctx.moveTo(g.cx + g.R, g.cy); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI, true); }, [0, 0, g.w, g.h]);
+    if (f.nIn > FOCUS_HAZE) this.haze(ctx, f.ion, () => { ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); }, [g.cx - g.R, g.cy - g.R, 2 * g.R, 2 * g.R]);
+  }
+  private drawFocusLabels(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
+    const f = this.focusCounts(g);
+    if (!f) { this.tag(ctx, `${LABEL[viewPref.ion]}: not in this cell's model here`, 10, 14, "left"); return; }
+    const ipd = (this.o.cellVolume * NA) / (Math.PI * g.R0 * g.R0 * this.vDens); // ions per mM in the cell ÷ dots per mM
+    const ratio = Math.max(f.ci, f.co) / Math.min(f.ci, f.co);
+    const r = ratio >= 100 ? Math.round(ratio).toLocaleString("en-US") : ratio.toFixed(1);
+    const outer = f.co > f.ci, hazed = outer ? f.nOut > FOCUS_HAZE : f.nIn > FOCUS_HAZE;
+    this.tag(ctx, `${LABEL[f.ion]} only (others faded)`, 10, 14, "left", color(f.ion), "600 12px system-ui, sans-serif");
+    this.tag(ctx, "inside", g.cx, g.cy - g.R + 22, "center");
+    this.tag(ctx, `${outer ? "outside" : "inside"}: ${r}× denser than ${outer ? "inside" : "outside"}${hazed ? ", drawn as a haze" : ""}`, g.w - 10, g.h - 28, "right", color(f.ion), "600 12px system-ui, sans-serif");
+    const big = (x: number) => (x >= 1e9 ? (x / 1e9).toFixed(1) + " billion" : x >= 1e6 ? (x / 1e6).toFixed(1) + " million" : Math.round(x).toLocaleString("en-US"));
+    this.tag(ctx, `this view: each ${LABEL[f.ion]} dot ≈ ${big(ipd)} ions`, g.w - 10, g.h - 10, "right");
+  }
+  private drawCensus(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
+    ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, g.w, g.h);
+    const L = this.censusLayout(g), muted = cssVar("--muted");
+    const cube = (ox: number, label: string, fill: string) => {
+      const { s, d, y } = L;
+      ctx.save(); ctx.fillStyle = fill; ctx.strokeStyle = muted; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.rect(ox, y + d, s, s); ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.moveTo(ox, y + d); ctx.lineTo(ox + d, y); ctx.lineTo(ox + s + d, y); ctx.lineTo(ox + s, y + d); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+      ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.moveTo(ox + s, y + d); ctx.lineTo(ox + s + d, y); ctx.lineTo(ox + s + d, y + s); ctx.lineTo(ox + s, y + s + d); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
+      ctx.restore();
+      this.tag(ctx, label, ox + s / 2, y + s + d + 16, "center", cssVar("--text"), "600 12px system-ui, sans-serif");
+      this.tag(ctx, "1 µm", ox + s / 2, y + d + s - 10, "center");
+    };
+    cube(L.inX, "inside", "#1a1626");
+    cube(L.outX, "outside", "#101826");
+    const ciCa = this.inside.Ca, coCa = this.outside.Ca;
+    const fmt = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(1) + " million" : n >= 1e4 ? Math.round(n / 1000) + " thousand" : Math.round(n).toLocaleString("en-US"));
+    if (ciCa !== undefined) {
+      const n = ciCa * IONS_PER_UM3_PER_MM;
+      if (n > 500) this.haze(ctx, "Ca", () => ctx.rect(L.inX, L.y + L.d, L.s, L.s), [L.inX, L.y + L.d, L.s, L.s]);
+      for (const d of this.vdots) glyph(ctx, "Ca", d.x, d.y, 3.2, Math.max(0, d.a));
+      this.tag(ctx, `${fmt(n)} Ca²⁺${n <= 500 && !L.narrow ? ", every one drawn" : ""}`, L.inX + L.s / 2, L.y + L.d + 14, "center", color("Ca"), "700 12px system-ui, sans-serif");
+    }
+    if (coCa !== undefined) {
+      this.haze(ctx, "Ca", () => ctx.rect(L.outX, L.y + L.d, L.s, L.s), [L.outX, L.y + L.d, L.s, L.s]);
+      this.tag(ctx, `${fmt(coCa * IONS_PER_UM3_PER_MM)} Ca²⁺`, L.outX + L.s / 2, L.y + L.d + 14, "center", color("Ca"), "700 12px system-ui, sans-serif");
+    }
+    // every ion, counted in one cubic micrometer, on a log scale
+    const rows: [Species, number | undefined, number | undefined][] = [["K", this.inside.K, this.outside.K], ["Na", this.inside.Na, this.outside.Na], ["Cl", this.inside.Cl, this.outside.Cl], ["Ca", ciCa, coCa]];
+    const bar = (n: number) => Math.max(0, (Math.log10(Math.max(n, 1)) - 1) / 7) * (L.narrow ? 70 : 110);
+    let ty = L.tableY;
+    const cIn = L.tableX + 46, cOut = cIn + (L.narrow ? 140 : 170);
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = muted;
+    ctx.fillText("ions in 1 µm³", L.tableX, ty - 30); ctx.fillText("inside", cIn, ty - 12); ctx.fillText("outside", cOut, ty - 12);
+    for (const [ion, ci, co] of rows) {
+      if (ci === undefined || co === undefined) continue;
+      const ni = ci * IONS_PER_UM3_PER_MM, no = co * IONS_PER_UM3_PER_MM;
+      ctx.fillStyle = color(ion); ctx.font = "600 13px system-ui, sans-serif"; ctx.fillText(LABEL[ion], L.tableX, ty + 8);
+      ctx.fillRect(cIn, ty, bar(ni), 7); ctx.strokeStyle = color(ion); ctx.lineWidth = 1.3; ctx.strokeRect(cOut, ty, bar(no), 7);
+      ctx.font = "11px ui-monospace, Menlo, monospace"; ctx.fillStyle = cssVar("--text"); ctx.fillText(fmt(ni), cIn, ty + 18);
+      ctx.fillStyle = muted; ctx.fillText(fmt(no), cOut, ty + 18);
+      ty += L.narrow ? 30 : 52;
+    }
+    if (!L.narrow) this.tag(ctx, "one cubic micrometer, inside and out: real counts, from the model now", g.w - 10, g.h - 10, "right");
+  }
+  private drawLens(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
+    const L = this.lensLayout(g), acc = cssVar("--accent");
+    const lx = g.cx + g.R, ly = g.cy, lr = 14 * g.k;
+    ctx.strokeStyle = acc; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(lx, ly, lr, 0, 2 * Math.PI); ctx.stroke();
+    ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(lx + lr * 0.7, ly - lr * 0.7); ctx.lineTo(L.bx, L.by); ctx.moveTo(lx + lr * 0.7, ly + lr * 0.7); ctx.lineTo(L.bx, L.by + L.bh); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.roundRect(L.bx, L.by, L.bw, L.bh, 12); ctx.clip();
+    ctx.fillStyle = "#1a1626"; ctx.fillRect(L.bx, L.by, L.bw / 2, L.bh);
+    ctx.fillStyle = "#101826"; ctx.fillRect(L.mid, L.by, L.bw / 2, L.bh);
+    ctx.fillStyle = cssVar("--membrane"); ctx.fillRect(L.mid - 7, L.by, 14, L.bh);
+    for (const d of this.vdots) glyph(ctx, d.ion, d.x, d.y, d.ion === "Ca" ? 3.6 : d.ion === "A" ? 3 : 2.6, Math.max(0, d.a));
+    // a visiting free Ca²⁺ is a single ion, not a dot of 500: drawn as a ring
+    for (let i = 0; i < this.caVisit.n; i++) {
+      const x = L.inR[0] + L.inR[2] * (0.3 + 0.2 * i), y = L.inR[1] + L.inR[3] * 0.4;
+      ctx.strokeStyle = color("Ca"); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(L.bx, L.by, L.bw, L.bh, 12); ctx.stroke();
+    const narrow = g.w < 640;
+    this.tag(ctx, narrow ? "in" : "inside: a 100 nm cube", L.bx + L.bw / 4, L.by + 16, "center", cssVar("--text"));
+    this.tag(ctx, narrow ? "out" : "outside: a 100 nm cube", L.mid + L.bw / 4, L.by + 16, "center", cssVar("--text"));
+    const mu = (this.inside.Ca ?? 0) * IONS_PER_UM3_PER_MM * 1e-3, out = (this.outside.Ca ?? 0) * IONS_PER_UM3_PER_MM * 1e-3;
+    if (this.inside.Ca !== undefined) this.tag(ctx, narrow ? `Ca²⁺ ${mu.toFixed(2)} avg` : mu < 1 ? `free Ca²⁺: ${mu.toFixed(2)} ions on average; usually none${this.caVisit.n ? " (one is visiting)" : ""}` : `free Ca²⁺: ${mu.toFixed(0)} ions`, L.bx + L.bw / 4, L.by + L.bh - 34, "center", color("Ca"));
+    if (this.outside.Ca !== undefined) this.tag(ctx, narrow ? `Ca²⁺ ${Math.round(out).toLocaleString("en-US")}` : `Ca²⁺: ${Math.round(out).toLocaleString("en-US")} ions (${Math.round(out / 500)} dots)`, L.mid + L.bw / 4, L.by + L.bh - 34, "center", color("Ca"));
+    this.tag(ctx, narrow ? "100 nm cubes · dot ≈ 500 ions" : "lens: each dot ≈ 500 ions; a ring is one Ca²⁺ ion", L.bx + L.bw - 8, L.by + L.bh - 12, "right");
   }
   private drawRim(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
     if (this.V === null || Math.abs(this.V) < 0.5) return;
@@ -674,9 +894,10 @@ export class CellStage {
     };
     tag("outside (bath)", 10, 14, "left");
     tag("inside", g.cx, g.cy - g.R + 22, "center");
-    tag(`each dot ≈ ${big(ipd)} ions`, g.w - 10, g.h - 28, "right");
-    tag(`each ± on the membrane ≈ ${Math.round(IONS_PER_SIGN / 1000)},000 ions`, g.w - 10, g.h - 11, "right");
-    if (this.thinning > 1.5) tag(`clock this fast: 1 in ${Math.round(this.thinning)} crossings shown, both ways alike`, g.w - 10, g.h - 45, "right");
+    const lens = viewPref.view === "lens", sx = lens ? 10 : g.w - 10, al: CanvasTextAlign = lens ? "left" : "right";
+    tag(`each dot ≈ ${big(ipd)} ions`, sx, lens ? 34 : g.h - 28, al);
+    tag(lens ? `each ± ≈ ${Math.round(IONS_PER_SIGN / 1000)},000 ions` : `each ± on the membrane ≈ ${Math.round(IONS_PER_SIGN / 1000)},000 ions`, sx, lens ? 52 : g.h - 11, al);
+    if (this.thinning > 1.5 && !lens) tag(`clock this fast: 1 in ${Math.round(this.thinning)} crossings shown, both ways alike`, sx, g.h - 45, al);
   }
   private drawPathway(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, pw: Pathway) {
     const k = g.k * 1.35;

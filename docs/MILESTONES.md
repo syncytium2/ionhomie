@@ -37,13 +37,13 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | Deployed v0.1.2, the review round, to https://ionhomie.tonydefazio.com (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
 | Deployed v0.1.1 to https://ionhomie.tonydefazio.com and https://ionhomie.tonydefazio.workers.dev (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | `c7c4555` |
 | Tony's review round built: two stated scales, one-way crossings, the charged rim, the nav bar, the balance, sampled playback | `built` | [ADR-0011](adr/0011-every-dot-and-crossing-is-on-a-stated-scale.md), [0012](adr/0012-a-nav-bar-on-every-page.md), [0013](adr/0013-a-balance-beside-the-ruler.md); `npm run check` | `62da620` |
+| Every cell stage has a View: cell, one ion, census of 1 µm³, magnifier; the learner's choice, kept in the browser | `built` | [ADR-0016](adr/0016-the-learner-picks-how-the-stage-shows-concentrations.md); `npm run check` drives every view | COMMIT3 |
 | KCC2 at 2.48 × 10⁻¹⁶ brings E_Cl to −85 mV; NKCC1 at 2.86 × 10⁻¹⁶ brings it to −36.5 mV and Vm to −59.9 mV | `measured` | `src/core/physics.test.ts` | `98282a8` |
 
 ## Open
 
 | what | waits on | blocks |
 |---|---|---|
-| **Choose how to show concentrations realistically**, Ca²⁺ above all (inside it is a few thousandths of a dot); options in [`feedback/2026-10-20-second-look.md`](feedback/2026-10-20-second-look.md) | **Tony** | the next stage change |
 | **Voltage-dependent resting conductances** ([ADR-0015](adr/0015-resting-conductances-from-the-pyramidal-cell.md)): source decided (the pyramidal cell); the design is proposed, not built | **Tony**, to rule when built; proposed after the concentration view | the "What is the leak?" section and Rin readouts |
 | **Rule on the details of ADR-0009**: the exact hues, and moving every number to the lecture's | **Tony** | settling the drawing and the presets |
 | **Rule on the particles-depict-the-physics decision** ([ADR-0004](adr/0004-the-physics-computes-the-particles-depict.md), proposed) | **Tony** | nothing now; it is how the app is built |

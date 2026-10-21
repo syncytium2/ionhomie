@@ -12,7 +12,7 @@ it is let go just past the pore and wanders on. If no dot is close enough, the c
 at most three); a pump or cotransporter cycle runs only when every ion it carries is at hand. Noted on
 [ADR-0011](../adr/0011-every-dot-and-crossing-is-on-a-stated-scale.md).
 
-## Seeing the concentrations, realistically (open: Tony to choose)
+## Seeing the concentrations, realistically (decided 2026-10-21: all three, the learner picks; [ADR-0016](../adr/0016-the-learner-picks-how-the-stage-shows-concentrations.md))
 
 > *"i think we need a way to visualize the concentrations inside and out, but keep a degree of realism. e.g.
 > there are no calcium ions inside, despite the fact that intracellular free calcium is crucial for neuronal
@@ -34,3 +34,6 @@ Static mockups, drawn with the app's colors and glyphs, every count from the mod
    drawn: 60. Outside, 1.5 million. Counts for every ion on a log scale.
 3. **A magnifier on the membrane** ([png](drafts/option_3.png)): a 100 nm cube on each side at one dot per
    500 ions: inside, K⁺ 168, Na⁺ 12, Cl⁻ 6 and no free Ca²⁺ (0.06 on average); outside, 3 Ca²⁺.
+
+*Correction to the magnifier draft: its outside label "3 Ca²⁺ in this cube" was wrong. The cube holds about
+1,500 Ca²⁺ ions, drawn as 3 dots of 500; the built view says so.*

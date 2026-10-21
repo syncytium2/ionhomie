@@ -1,7 +1,7 @@
 import { $, drawKey, loop } from "../views/draw.ts";
 import { Lab } from "../views/lab.ts";
 import { CHAPTERS } from "./index.ts";
-import { Below, ModelNote, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, useEngine } from "./parts.tsx";
 
 function engine() {
   // The healthy cell, alive: leaks and pump running, every concentration held still.
@@ -18,7 +18,7 @@ export default function Home() {
   return (
     <main>
       <div className="grid hero home-hero">
-        <div className="panel"><canvas id="stage" /></div>
+        <div className="panel"><canvas id="stage" /><ViewPicker /></div>
         <div className="panel"><h3>Voltage ruler</h3><canvas id="ruler" /></div>
       </div>
       <div className="panel"><canvas id="key" /></div>

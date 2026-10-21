@@ -91,6 +91,26 @@ for (const [route, script] of Object.entries(ROUTES)) {
     await page.close();
   }
 }
+// every stage view (docs/adr/0016), on a running cell and a fixed one, at both widths
+for (const route of ["pumps", "compartments"]) {
+  for (const [label, viewport] of [["desktop", { width: 1280, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
+    const page = await browser.newPage({ viewport });
+    page.on("console", (m) => { if (m.type() === "error") problems.push(`${route} views [${label}] console: ${m.text()}`); });
+    page.on("pageerror", (e) => problems.push(`${route} views [${label}] pageerror: ${e.message}`));
+    await page.goto(`${ORIGIN}/#/${route}`);
+    await page.waitForTimeout(400);
+    for (const [view, act] of [["focus-ca", async () => { await page.selectOption('select[aria-label="ion to focus on"]', "Ca"); }],
+                               ["focus-na", async () => { await page.selectOption('select[aria-label="ion to focus on"]', "Na"); }],
+                               ["census", async () => { await page.getByRole("button", { name: "Census, 1 µm³" }).click(); }],
+                               ["lens", async () => { await page.getByRole("button", { name: "Magnifier" }).click(); }],
+                               ["cell", async () => { await page.getByRole("button", { name: "Cell", exact: true }).click(); }]]) {
+      try { await act(); } catch (e) { problems.push(`${route} views [${label}] could not choose ${view}: ${e.message.split("\n")[0]}`); }
+      await page.waitForTimeout(1500);
+      await page.locator("#stage").screenshot({ path: join(out, `${route}_view-${view}_${label}.png`) });
+    }
+    await page.close();
+  }
+}
 await browser.close();
 cleanup();
 if (problems.length) { console.error(problems.join("\n")); process.exit(1); }

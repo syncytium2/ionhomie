@@ -140,7 +140,7 @@ export class Lab {
     const s = this.s;
     this.flows(dt);
     const NA = 6.02214076e23;
-    this.stage.setConcentrations({ Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A }, this.bath, s.volume / this.vol0);
+    this.stage.setConcentrations({ Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A, Ca: s.ci.Ca }, this.bath, s.volume / this.vol0);
     this.stage.setAmounts({ Na: this.n.Na * NA, K: this.n.K * NA, Cl: this.n.Cl * NA, A: this.n.A * NA });
     this.stage.setV(s.V * 1000);
     this.stage.step(dt); this.stage.draw();

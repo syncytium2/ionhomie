@@ -1,7 +1,7 @@
 import * as I from "../core/physics.ts";
 import { $, fmtBig, fmtMv, loop, setText } from "../views/draw.ts";
 import { Lab } from "../views/lab.ts";
-import { Below, ModelNote, Readout, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, Readout, useEngine } from "./parts.tsx";
 import { Clock } from "./Rundown.tsx";
 
 function engine() {
@@ -48,6 +48,7 @@ export default function Pumps() {
       <div className="grid hero">
         <div className="panel">
           <canvas id="stage" />
+          <ViewPicker />
           <div className="controls"><Clock /></div>
           <div className="controls">
             <button id="ouabain" className="danger">Ouabain: block the pump</button>

@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { setStageView, viewPref, type Species, type StageView } from "../views/draw.ts";
 
 /**
  * Start a chapter's imperative engine after mount and stop it on unmount. The engine draws into
@@ -7,6 +8,31 @@ import { useEffect, type ReactNode } from "react";
  */
 export function useEngine(start: () => () => void) {
   useEffect(() => start(), []); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/**
+ * How the stage shows the ions (docs/adr/0016): the cell, one ion on its own scale, a census of one cubic
+ * micrometer, or a magnifier on the membrane. The learner picks; the choice holds on every stage.
+ */
+export function ViewPicker() {
+  const [view, setView] = useState<StageView>(viewPref.view);
+  const [ion, setIon] = useState<Species>(viewPref.ion);
+  const pick = (v: StageView, i: Species = ion) => { setStageView(v, i); setView(v); setIon(i); };
+  const b = (v: StageView, label: string) => (
+    <button className={view === v ? "on" : ""} aria-pressed={view === v} onClick={() => pick(v)}>{label}</button>
+  );
+  return (
+    <div className="controls viewpick">
+      <span className="viewlabel">View</span>
+      {b("cell", "Cell")}
+      {b("focus", "One ion")}
+      <select aria-label="ion to focus on" value={ion} onChange={(e) => pick("focus", e.target.value as Species)}>
+        <option value="Na">Na⁺</option><option value="K">K⁺</option><option value="Cl">Cl⁻</option><option value="Ca">Ca²⁺</option>
+      </select>
+      {b("census", "Census, 1 µm³")}
+      {b("lens", "Magnifier")}
+    </div>
+  );
 }
 
 /** Everything that is not the action: it sits below it (docs/adr/0008). */
