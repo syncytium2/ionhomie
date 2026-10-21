@@ -49,3 +49,4 @@ change so the two never disagree.
 | [0011](0011-every-dot-and-crossing-is-on-a-stated-scale.md) | Every dot and every crossing is on a stated scale, and the scales agree | Accepted (Tony's review; the design is Claude's) |
 | [0012](0012-a-nav-bar-on-every-page.md) | A nav bar on every page: brand and stamp, then every chapter | Accepted (Tony) |
 | [0013](0013-a-balance-beside-the-ruler.md) | A balance beside the ruler, and a zero line with weight | Accepted (Tony asked; the forms are Claude's) |
+| [0015](0015-resting-conductances-from-the-pyramidal-cell.md) | Resting conductances come from gaba_excites's pyramidal cell | Accepted in part (Tony chose the source; the rest is proposed, not built) |

@@ -44,6 +44,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | what | waits on | blocks |
 |---|---|---|
 | **Choose how to show concentrations realistically**, Ca²⁺ above all (inside it is a few thousandths of a dot); options in [`feedback/2026-10-20-second-look.md`](feedback/2026-10-20-second-look.md) | **Tony** | the next stage change |
+| **Voltage-dependent resting conductances** ([ADR-0015](adr/0015-resting-conductances-from-the-pyramidal-cell.md)): source decided (the pyramidal cell); the design is proposed, not built | **Tony**, to rule when built; proposed after the concentration view | the "What is the leak?" section and Rin readouts |
 | **Rule on the details of ADR-0009**: the exact hues, and moving every number to the lecture's | **Tony** | settling the drawing and the presets |
 | **Rule on the particles-depict-the-physics decision** ([ADR-0004](adr/0004-the-physics-computes-the-particles-depict.md), proposed) | **Tony** | nothing now; it is how the app is built |
 | **Play through the GHK, rundown and pump chapters in order** and confirm or overturn the chapter arc | **Tony** | settling the arc |
