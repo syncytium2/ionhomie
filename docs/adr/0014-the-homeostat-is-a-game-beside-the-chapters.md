@@ -34,6 +34,9 @@ so feel its rate, its stoichiometry and its cost. Two things in the brief needed
   game's, and the page says so. The clock runs 2, 5 or 10 seconds per second, stated on screen; at 5, a
   steady player drags about once every few seconds.
 - **A carry is a crossing of one real dot, at the stage's own scale** (ADR-0011), not a separate game scale.
+- **The game has no view picker** (ADR-0016): it is played on the cell view, whatever view the learner
+  chose elsewhere, because a moved dot is a bulk dot and the one-ion, census and magnifier views each have
+  their own scale. The learner's saved choice is left alone and applies again on leaving.
 - **A carry goes through the physics as a flux.** `physics.ts` takes an optional extra flux per ion
   (`Extra`, mol/s, outward positive) in `netCurrent`, `restingV`, `snapshot` and `step`, inside the
   zero-current solve. The lab delivers each carried dot's moles as a flux that dies away over 20 seconds of

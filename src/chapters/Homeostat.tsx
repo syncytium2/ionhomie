@@ -1,5 +1,5 @@
 import * as I from "../core/physics.ts";
-import { $, fmtBig, fmtConc, fmtMv, fmtTime, loop, setText } from "../views/draw.ts";
+import { $, fmtBig, fmtConc, fmtMv, fmtTime, loop, setText, viewPref } from "../views/draw.ts";
 import { Lab } from "../views/lab.ts";
 import { Below, ModelNote, Readout, useEngine } from "./parts.tsx";
 
@@ -13,6 +13,10 @@ const NA_MAX = 30, K_MIN = 110; // mM: past either, the cell has run down
 const NAV = 6.02214076e23;
 
 function engine() {
+  // The game is played on the cell view: a moved dot is a bulk dot, and the other views have their own
+  // scales (docs/adr/0016). Held for this page only; the learner's saved choice is put back on leaving.
+  const theirView = viewPref.view;
+  viewPref.view = "cell";
   const lab = new Lab({ pump: false, speed: 5, setup: (cell) => { cell.pump.on = false; cell.pmca.on = false; }, onReset: () => restart() });
   lab.controls();
   const canvas = $<HTMLCanvasElement>("stage");
@@ -67,7 +71,7 @@ function engine() {
       : `The cell ran down after ${fmtTime(lab.t)}. Reset to try again; a slower clock gives you more time per drag.`, how);
   };
 
-  return loop((dt) => {
+  const stop = loop((dt) => {
     lab.advance(dt);
     lab.draw(dt);
     const s = lab.s, e = lab.extra();
@@ -84,6 +88,7 @@ function engine() {
     setText("r-band", `Na⁺ ${fmtConc(s.ci.Na)} / ${NA_MAX} mM · K⁺ ${fmtConc(s.ci.K)} / ${K_MIN} mM`);
     setText("r-share", fmtMv((s.V - I.snapshot(lab.cell, lab.n, lab.bath).V) * 1000));
   });
+  return () => { stop(); viewPref.view = theirView; };
 }
 
 export default function Homeostat() {
