@@ -3,6 +3,8 @@
 // (docs/adr/0004). Ported from prototype/demo/views.js.
 
 import { chargeLedger } from "../core/physics.ts";
+import { DOT_DENSITY, IONS_PER_SIGN, STAGE } from "./stage-style.ts";
+export { DOT_DENSITY, IONS_PER_SIGN };
 
 export type Species = "Na" | "K" | "Cl" | "Ca" | "A" | "X";
 
@@ -282,7 +284,7 @@ export function ledger(canvas: HTMLCanvasElement, { V, radius = 10e-6, kIn = 140
 }
 function sign(ctx: CanvasRenderingContext2D, x: number, y: number, s: string) {
   ctx.save();
-  ctx.fillStyle = s === "+" ? "#ffb4a2" : "#9ad1ff";
+  ctx.fillStyle = s === "+" ? STAGE.rimPlus : STAGE.rimMinus;
   ctx.font = "700 15px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(s, x, y);
   ctx.restore();
@@ -412,8 +414,6 @@ export function balance(canvas: HTMLCanvasElement, st: { left: Weight[]; right: 
 //    In the fast chapters, crossings are drawn at this scale and join the rim.
 // Motion between crossings is depiction only: a slow, smooth wander, not the model's diffusion.
 
-export const DOT_DENSITY = 0.0062; // dots per mM per 1000 px², inside and out
-export const IONS_PER_SIGN = 1.1e5; // ions of membrane charge per drawn rim sign
 
 // ---------- the stage's view: one choice for every stage, kept in this browser (docs/adr/0016) ----------
 export type StageView = "cell" | "focus" | "census" | "lens";
@@ -661,13 +661,13 @@ export class CellStage {
     const { ctx } = fit(this.c, this.o.height);
     const view = viewPref.view;
     if (view === "census") { this.drawCensus(ctx, g); return; }
-    ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, g.w, g.h);
-    ctx.fillStyle = "#1a1626"; ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = STAGE.bath; ctx.fillRect(0, 0, g.w, g.h);
+    ctx.fillStyle = STAGE.cyto; ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.fill();
     const focus = view === "focus";
     if (focus) this.drawFocusHaze(ctx, g);
-    for (const q of this.parts) if (!q.busy) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? 3.4 : 2.8, Math.max(0, q.a) * (focus ? 0.1 : 0.95));
+    for (const q of this.parts) if (!q.busy) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? STAGE.aR : STAGE.dotR, Math.max(0, q.a) * (focus ? 0.1 : 0.95));
     if (focus) for (const d of this.vdots) glyph(ctx, d.ion, d.x, d.y, 3.4, Math.max(0, d.a));
-    ctx.strokeStyle = cssVar("--membrane"); ctx.lineWidth = 8; ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = cssVar("--membrane"); ctx.lineWidth = STAGE.membraneWidth; ctx.globalAlpha = 0.9;
     ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.stroke(); ctx.globalAlpha = 1;
     this.drawRim(ctx, g);
     this.pathways.forEach((pw) => this.drawPathway(ctx, g, pw));
@@ -677,7 +677,7 @@ export class CellStage {
       if (m.rim) {
         ctx.save(); ctx.globalAlpha = m.t > 0.85 ? (1 - m.t) / 0.15 : 1;
         ctx.strokeStyle = color(m.ion); ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, 2 * Math.PI); ctx.stroke(); ctx.restore();
-      } else glyph(ctx, m.ion, x, y, 3.6, 1);
+      } else glyph(ctx, m.ion, x, y, STAGE.crossR, 1);
     }
     if (focus) this.drawFocusLabels(ctx, g);
     else this.drawScale(ctx, g);
@@ -796,7 +796,7 @@ export class CellStage {
     this.tag(ctx, `this view: each ${LABEL[f.ion]} dot ≈ ${big(ipd)} ions`, g.w - 10, g.h - 10, "right");
   }
   private drawCensus(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
-    ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, g.w, g.h);
+    ctx.fillStyle = STAGE.bath; ctx.fillRect(0, 0, g.w, g.h);
     const L = this.censusLayout(g), muted = cssVar("--muted");
     const cube = (ox: number, label: string, fill: string) => {
       const { s, d, y } = L;
@@ -808,8 +808,8 @@ export class CellStage {
       this.tag(ctx, label, ox + s / 2, y + s + d + 16, "center", cssVar("--text"), "600 12px system-ui, sans-serif");
       this.tag(ctx, "1 µm", ox + s / 2, y + d + s - 10, "center");
     };
-    cube(L.inX, "inside", "#1a1626");
-    cube(L.outX, "outside", "#101826");
+    cube(L.inX, "inside", STAGE.cyto);
+    cube(L.outX, "outside", STAGE.bath);
     const ciCa = this.inside.Ca, coCa = this.outside.Ca;
     const fmt = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(1) + " million" : n >= 1e4 ? Math.round(n / 1000) + " thousand" : Math.round(n).toLocaleString("en-US"));
     if (ciCa !== undefined) {
@@ -848,8 +848,8 @@ export class CellStage {
     ctx.beginPath(); ctx.arc(lx, ly, lr, 0, 2 * Math.PI); ctx.stroke();
     ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(lx + lr * 0.7, ly - lr * 0.7); ctx.lineTo(L.bx, L.by); ctx.moveTo(lx + lr * 0.7, ly + lr * 0.7); ctx.lineTo(L.bx, L.by + L.bh); ctx.stroke();
     ctx.save(); ctx.beginPath(); ctx.roundRect(L.bx, L.by, L.bw, L.bh, 12); ctx.clip();
-    ctx.fillStyle = "#1a1626"; ctx.fillRect(L.bx, L.by, L.bw / 2, L.bh);
-    ctx.fillStyle = "#101826"; ctx.fillRect(L.mid, L.by, L.bw / 2, L.bh);
+    ctx.fillStyle = STAGE.cyto; ctx.fillRect(L.bx, L.by, L.bw / 2, L.bh);
+    ctx.fillStyle = STAGE.bath; ctx.fillRect(L.mid, L.by, L.bw / 2, L.bh);
     ctx.fillStyle = cssVar("--membrane"); ctx.fillRect(L.mid - 7, L.by, 14, L.bh);
     for (const d of this.vdots) glyph(ctx, d.ion, d.x, d.y, d.ion === "Ca" ? 3.6 : d.ion === "A" ? 3 : 2.6, Math.max(0, d.a));
     // a visiting free Ca²⁺ is a single ion, not a dot of 500: drawn as a ring
@@ -876,8 +876,8 @@ export class CellStage {
     ctx.font = "700 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     for (let i = 0; i < n; i++) {
       const a = (i / Math.max(n, 1)) * 2 * Math.PI + 0.013;
-      for (const [r, s] of [[g.R + 9, neg ? "+" : "−"], [g.R - 9, neg ? "−" : "+"]] as const) {
-        ctx.fillStyle = s === "+" ? "#ffb4a2" : "#9ad1ff";
+      for (const [r, s] of [[g.R + STAGE.rimR, neg ? "+" : "−"], [g.R - STAGE.rimR, neg ? "−" : "+"]] as const) {
+        ctx.fillStyle = s === "+" ? STAGE.rimPlus : STAGE.rimMinus;
         ctx.fillText(s, g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r);
       }
     }
@@ -906,26 +906,26 @@ export class CellStage {
     ctx.translate(x, y); ctx.rotate(pw.angle + Math.PI / 2); ctx.scale(k, k);
     const col = pw.ions && pw.ions.length === 1 ? color(pw.ions[0]) : cssVar("--text");
     if (pw.kind === "channel") {
-      ctx.fillStyle = "#101826"; ctx.fillRect(-6, -9, 12, 18);
+      ctx.fillStyle = STAGE.bath; ctx.fillRect(-6, -9, 12, 18);
       ctx.fillStyle = col; ctx.globalAlpha = 0.95;
       ctx.beginPath(); ctx.roundRect(-14, -12, 8, 24, 3); ctx.fill();
       ctx.beginPath(); ctx.roundRect(6, -12, 8, 24, 3); ctx.fill();
       ctx.globalAlpha = 1;
       if (!pw.open) { ctx.fillStyle = cssVar("--muted"); ctx.fillRect(-6, -2.5, 12, 5); }
     } else if (pw.kind === "pump" || pw.kind === "pmca") {
-      ctx.fillStyle = pw.on === false ? "#3a3a3a" : pw.kind === "pump" ? "#b9a3ff" : cssVar("--ca");
+      ctx.fillStyle = pw.on === false ? STAGE.off : pw.kind === "pump" ? STAGE.pump : cssVar("--ca");
       ctx.beginPath(); ctx.arc(0, 0, 16, 0, 2 * Math.PI); ctx.fill();
       ctx.strokeStyle = "#0d1117"; ctx.lineWidth = 2.5;
       for (let i = 0; i < 3; i++) { const a = (pw.phase || 0) + (i * 2 * Math.PI) / 3; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 14, Math.sin(a) * 14); ctx.stroke(); }
     } else {
-      ctx.fillStyle = pw.on === false ? "#3a3a3a" : pw.kind === "nkcc1" ? "#7fb069" : "#e07a5f";
+      ctx.fillStyle = pw.on === false ? STAGE.off : pw.kind === "nkcc1" ? STAGE.nkcc1 : STAGE.kcc2;
       ctx.beginPath(); ctx.roundRect(-18, -12, 36, 24, 6); ctx.fill();
     }
     ctx.restore();
     if (pw.label) {
       const lx = g.cx + Math.cos(pw.angle) * (g.R + 40 * g.k), ly = g.cy + Math.sin(pw.angle) * (g.R + 40 * g.k);
       ctx.font = "600 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.lineWidth = 3; ctx.strokeStyle = "#101826"; ctx.strokeText(pw.label, lx, ly);
+      ctx.lineWidth = 3; ctx.strokeStyle = STAGE.bath; ctx.strokeText(pw.label, lx, ly);
       ctx.fillStyle = cssVar("--text"); ctx.fillText(pw.label, lx, ly);
     }
   }
