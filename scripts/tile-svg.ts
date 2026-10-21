@@ -97,11 +97,11 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" rol
 <!--
   ionhomie, the home page's living cell (https://ionhomie.tonydefazio.com), drawn by scripts/tile-svg.ts from
   src/core/physics.ts at commit ${commit}. Command: node scripts/tile-svg.ts
-  The loop (${LOOP} s) is one steady state of the model's healthy cell (Vm ${(s.V * 1000).toFixed(1)} mV):
+  The loop (${LOOP} s) is one steady state of the model's healthy cell (Vm ${(s.V * 1000).toFixed(1).replace("-", "−")} mV):
     the Na⁺/K⁺ pump runs one cycle: 3 Na⁺ out, then 2 K⁺ in;
     the K⁺ leak: ${n.Kout} out and ${n.Kin} in (net 2 out, which the pump returns);
     the Na⁺ leak: ${n.Nain} in and ${n.Naout} out (net 3 in, which the pump returns);
-    the Cl⁻ leak: equal both ways (Cl⁻ sits at its reversal potential), shown at 1 in ${f1(clFrac)} of its crossings.
+    the Cl⁻ leak: ${clShow} in and ${clShow} out (Cl⁻ sits at its reversal potential)${clFrac > 1.05 ? `, shown at 1 in ${f1(clFrac)} of its crossings` : ""}.
   Counts are the model's one-way fluxes in proportion to one pump cycle. The ± rim is the membrane charge, inside negative.
   Bath and cell dots are at one density per mM (Na⁺ 145, Cl⁻ 106, K⁺ 5 outside; K⁺ 140, A⁻, Na⁺ 10, Cl⁻ 5 inside).
   Colors are classes (.na .k .cl .a .mem .rp .rn .pump .pumpv .ch) for the host stylesheet to tune.
@@ -114,8 +114,8 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" rol
 @keyframes w0{50%{transform:translate(1.5px,-1px)}}@keyframes w1{50%{transform:translate(-1px,1.5px)}}@keyframes w2{50%{transform:translate(1px,1px)}}@keyframes w3{50%{transform:translate(-1.5px,-1px)}}
 .w0{animation:w0 6s ease-in-out infinite}.w1{animation:w1 6s ease-in-out infinite;animation-delay:-1.5s}.w2{animation:w2 6s ease-in-out infinite;animation-delay:-3s}.w3{animation:w3 6s ease-in-out infinite;animation-delay:-4.5s}
 ${css.join("\n")}
-@media (prefers-reduced-motion: reduce){.w,.rock,.mv{animation:none}.mv{opacity:0}.still{opacity:1}}
 .still{opacity:0}
+@media (prefers-reduced-motion: reduce){.w,.rock,.mv{animation:none}.mv{opacity:0}.still{opacity:1}}
 </style>
 <rect class="bath" width="${W}" height="${H}" rx="8"/>
 ${bath.join("")}
