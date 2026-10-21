@@ -40,8 +40,8 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | Every cell stage has a View: cell, one ion, census of 1 µm³, magnifier; the learner's choice, kept in the browser | `built` | [ADR-0016](adr/0016-the-learner-picks-how-the-stage-shows-concentrations.md); `npm run check` drives every view | `fb444ba` |
 | The tonydefazio.com tile is the home stage, drawn by `node scripts/tile-svg.ts` from the stage's own constants; live there as site 1.11.1 from 5c225e6. **It is a copy**: a change to `scripts/tile-svg.ts` or `src/views/stage-style.ts` that alters its look must be regenerated and sent to the tonydefazio.com session | `built` | `scripts/tile-svg.ts`; tonydefazio.com | `5c225e6` |
 | KCC2 at 2.48 × 10⁻¹⁶ brings E_Cl to −85 mV; NKCC1 at 2.86 × 10⁻¹⁶ brings it to −36.5 mV and Vm to −59.9 mV | `measured` | `src/core/physics.test.ts` | `98282a8` |
-| The homeostat's first level: carry Na⁺ and K⁺ by hand against the leaks; a carry is a flux through the zero-current solve | `built` | [ADR-0014](adr/0014-the-homeostat-is-a-game-beside-the-chapters.md); `src/chapters/Homeostat.tsx`; `npm run check` | `ca1041d` |
-| A hand moving 3 Na⁺ out for 2 K⁺ in at the pump's rate is exactly the pump; a balanced extra flux leaves Vm alone | `measured` | `src/core/physics.test.ts` | `ca1041d` |
+| The homeostat's first level: carry Na⁺ and K⁺ by hand against the leaks; a carry is a flux through the zero-current solve | `built` | [ADR-0014](adr/0014-the-homeostat-is-a-game-beside-the-chapters.md); `src/chapters/Homeostat.tsx`; `npm run check` | `7814da9` |
+| A hand moving 3 Na⁺ out for 2 K⁺ in at the pump's rate is exactly the pump; a balanced extra flux leaves Vm alone | `measured` | `src/core/physics.test.ts` | `7814da9` |
 
 ## Open
 
