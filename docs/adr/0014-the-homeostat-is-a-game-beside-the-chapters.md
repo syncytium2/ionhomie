@@ -25,8 +25,11 @@ so feel its rate, its stoichiometry and its cost. Two things in the brief needed
 
 - **A separate route, `#/homeostat`, outside the reading order** (ADR-0001 fixes the chapters). Its nav tab,
   "▶ Homeostat", sits after Chloride, set apart; the home page lists it after the chapters.
-- **The first level: you are the pump.** The rundown chapter's cell (leaks on; pump and PMCA stopped). The
-  player presses on a Na⁺ or K⁺ dot, carries it across the membrane and lets go. Win by holding Na⁺ inside
+- **The first level: you are the pump.** The rundown chapter's cell (leaks on; pump and PMCA stopped). A tap on
+  a Na⁺ or K⁺ dot sends it straight across the membrane (inside to out, outside to in), which works on a
+  phone; a drag carries it wherever it is let go. Tony: *"consider just a simple click to remove an ion from
+  inside to outside. this might make it work on the phone too"*, said of the drag-only version. A tap
+  reaches only a dot under the finger (16 px), so a tap on a dot already crossing does nothing. Win by holding Na⁺ inside
   under 30 mM and K⁺ over 110 mM for 10 minutes of cell time; lose when either is crossed. The limits are the
   game's, and the page says so. The clock runs 2, 5 or 10 seconds per second, stated on screen; at 5, a
   steady player drags about once every few seconds.

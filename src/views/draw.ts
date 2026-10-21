@@ -637,6 +637,11 @@ export class CellStage {
       }
     }
     this.moving = this.moving.filter((m) => m.t < 1);
+    for (const f of this.flights) {
+      f.t += dt / 0.6;
+      if (f.t >= 1) { f.q.x = f.x1; f.q.y = f.y1; f.q.vx = 0; f.q.vy = 0; f.q.where = f.to; f.q.busy = false; }
+    }
+    this.flights = this.flights.filter((f) => f.t < 1);
   }
   // ---- the homeostat's hand: pick up a dot, carry it, let it go ----
   private held: Particle | null = null;
@@ -650,7 +655,7 @@ export class CellStage {
       if (d < bd) { bd = d; best = q; }
     }
     if (!best) return null;
-    best.busy = true; this.held = best; this.heldFrom = best.where;
+    best.busy = true; this.held = best; this.heldFrom = best.where; this.heldAt = [best.x, best.y];
     return { ion: best.ion, from: best.where };
   }
   carry(x: number, y: number) { if (this.held) { this.held.x = x; this.held.y = y; } }
@@ -664,6 +669,22 @@ export class CellStage {
     q.where = to;
     return to === this.heldFrom ? null : { ion: q.ion, dir: to === "out" ? 1 : -1 };
   }
+  /**
+   * A tap instead of a carry: the held dot glides straight across the membrane to the other side,
+   * along its own radius. Returns the crossing it makes.
+   */
+  flick(): { ion: Species; dir: number } | null {
+    const q = this.held;
+    if (!q) return null;
+    this.held = null;
+    const g = this.geometry(), from = this.heldFrom, to: Where = from === "in" ? "out" : "in";
+    const a = Math.atan2(q.y - g.cy, q.x - g.cx), r = to === "out" ? g.R + 22 * g.k : g.R - 22 * g.k;
+    q.x = this.heldAt[0]; q.y = this.heldAt[1];
+    this.flights.push({ q, x0: q.x, y0: q.y, x1: g.cx + Math.cos(a) * r, y1: g.cy + Math.sin(a) * r, t: 0, to });
+    return { ion: q.ion, dir: to === "out" ? 1 : -1 };
+  }
+  private flights: { q: Particle; x0: number; y0: number; x1: number; y1: number; t: number; to: Where }[] = [];
+  private heldAt: [number, number] = [0, 0];
   private pos(m: Crossing, g: ReturnType<CellStage["geometry"]>) {
     const rIn = g.R - 16 * g.k, rOut = g.R + 16 * g.k;
     const [ax, ay] = this.mouth(m.p, g, m.dir > 0 ? rIn : rOut, m.da);
@@ -706,6 +727,10 @@ export class CellStage {
       } else glyph(ctx, m.ion, x, y, STAGE.crossR, 1);
     }
     if (this.held) { const q = this.held; glyph(ctx, q.ion, q.x, q.y, 6, 1); } // the homeostat's hand (docs/adr/0014)
+    for (const f of this.flights) {
+      const u = f.t * f.t * (3 - 2 * f.t);
+      glyph(ctx, f.q.ion, f.x0 + (f.x1 - f.x0) * u, f.y0 + (f.y1 - f.y0) * u, 4.5, 1);
+    }
     if (focus) this.drawFocusLabels(ctx, g);
     else this.drawScale(ctx, g);
     if (view === "lens") this.drawLens(ctx, g);
