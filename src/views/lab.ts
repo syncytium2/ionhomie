@@ -142,7 +142,10 @@ export class Lab {
     // alike, so the ratio of in to out is kept; any net change still arrives as crossings (the stage
     // corrects its counts through the ion's own leak). The stage says when it is thinning.
     const fastest = Math.max(...one.map(({ u }) => Math.max(u.efflux, u.influx) * s.area), 5 * s.pump, 4 * Math.abs(s.nkcc1), 2 * Math.abs(s.kcc2)) * perReal;
-    const k = Math.max(1, fastest / 6);
+    // a protein shows a cycle in about 3 s (bind, close, rock, release; the pump does two halves), so cycles
+    // beyond ~0.3 per second per protein are thinned with everything else, both ways alike
+    const cycles = Math.max(this.o.pump ? s.pump : 0, this.o.ccc ? Math.abs(s.nkcc1) : 0, this.o.ccc ? Math.abs(s.kcc2) : 0) * perReal;
+    const k = Math.max(1, fastest / 6, cycles / 0.3);
     this.stage.thinning = k;
     perReal /= k;
     for (const { ion, u } of one) this.stage.flowBulk(at(ion), ion, u.efflux * s.area * perReal, u.influx * s.area * perReal, dt);

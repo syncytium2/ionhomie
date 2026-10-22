@@ -20,3 +20,8 @@ Built 2026-10-22, checked, **not deployed**:
 | Too slow to be exciting | The 100× clock and the faster wander. |
 | Running down should be dramatic | A loss keeps the clock running at 2,000× for 7 real seconds, so the player watches the cell run down: Na⁺ floods in, K⁺ drains, the ± rim thins as Vm heads to zero, the cell swells. The stage shakes, pulses red and says "The cell ran down" with the final numbers. A win glows green. `scripts/check.mjs` lets the cell run down on purpose and screenshots the scene. |
 | The Na⁺ leak "voltage gated" | Not built: [ADR-0015](../adr/0015-resting-conductances-from-the-pyramidal-cell.md) decided the source (the pyramidal cell's channels) and proposed the design; its build was queued after the concentration view, which is now done. Waiting on Tony's go-ahead. |
+
+> *"i thought we had animated the pumps and transporters more realistically"*
+
+It had been advised, not built. Built 2026-10-22 as [ADR-0017](../adr/0017-transport-proteins-rock-they-do-not-spin.md): bind,
+close (ATP → ADP on the pump), rock, release; no rotors. Not deployed.

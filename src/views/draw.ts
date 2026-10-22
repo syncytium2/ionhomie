@@ -487,6 +487,15 @@ export interface Pathway {
 }
 type Where = "in" | "out";
 interface Particle { ion: Species; where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; busy: boolean }
+interface Leg { ions: Species[]; from: Where }
+interface Bound { q: Particle; slot: number; x0: number; y0: number; walk: number; start: number }
+/** A transport protein's alternating-access cycle (docs/adr/0017): bind, close, rock, release. */
+interface Protein {
+  o: number; // which way the cleft opens: +1 outward, −1 inward, 0 closed (occluded)
+  phase: "idle" | "toSide" | "wait" | "bind" | "close" | "rock" | "release";
+  t: number; from: number; to: number; // the rock's start and end openness, for the phases that rock
+  legs: Leg[]; leg: number; bound: Bound[]; atp: number; waited: number; clock: number;
+}
 interface Crossing { p: number; ion: Species; dir: number; t: number; dur: number; walk?: number; part?: Particle; x0: number; y0: number; da: number; rim: boolean; delay: number }
 export interface StageOpts { height: number; ions: Species[]; mode: "fixed" | "amounts"; cellVolume: number; /** wander strength, px/√s (depiction only) */ wander: number }
 
@@ -502,6 +511,7 @@ export class CellStage {
   V: number | null = null; // mV, for the rim
   thinning = 1; // crossings shown are 1 in this many (the lab sets it at fast clocks)
   private acc = new Map<string, number>();
+  private prot = new Map<number, Protein>();
   private lastKey = "";
   private vdots: Dot[] = []; // the focus, census and lens views' own dots
   private vKey = "";
@@ -560,10 +570,10 @@ export class CellStage {
     return [g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r];
   }
   /** The source-side dots of this ion close enough to pathway p's mouth to cross (nearest first). */
-  private nearby(p: number, ion: Species, dir: number) {
+  private nearby(p: number, ion: Species, dir: number, reachPx?: number) {
     const g = this.geometry(), from: Where = dir > 0 ? "in" : "out";
     const [mx, my] = this.mouth(p, g, dir > 0 ? g.R - 16 * g.k : g.R + 16 * g.k);
-    const reach = 80 * g.k;
+    const reach = reachPx ?? 80 * g.k;
     return this.parts
       .filter((q) => q.ion === ion && q.where === from && !q.dying && !q.busy)
       .map((q) => ({ q, d: Math.hypot(q.x - mx, q.y - my) }))
@@ -600,18 +610,104 @@ export class CellStage {
     this.every(`${p}${ion}o`, efflux, dt, () => this.transfer(p, ion, +1, 0, (Math.random() - 0.5) * 0.08));
     this.every(`${p}${ion}i`, influx, dt, () => this.transfer(p, ion, -1, 0, (Math.random() - 0.5) * 0.08));
   }
-  /** Cycles of a pump or cotransporter: every member crosses together. */
+  /**
+   * Cycles of a pump or cotransporter, as alternating access (docs/adr/0017): the ions of one half-cycle
+   * bind in the cleft, it closes, rocks to the other face and releases them. The Na⁺/K⁺ pump runs two halves
+   * (3 Na⁺ out, then 2 K⁺ in); a cotransporter one half, then rocks back empty. A negative rate runs it in
+   * reverse. A cycle starts only when the protein is free and the first half's ions are at hand.
+   */
   flowGroup(p: number, members: { ion: Species; dir: number }[], cycles: number, dt: number) {
     const sgn = Math.sign(cycles);
+    if (!sgn) return;
     this.every(`${p}g`, Math.abs(cycles), dt, () => {
-      // a cycle runs only when every ion it carries is at hand
-      const need = new Map<string, { ion: Species; dir: number; n: number }>();
-      for (const m of members) { const k = m.ion + (m.dir * sgn); const e = need.get(k) ?? { ion: m.ion, dir: m.dir * sgn, n: 0 }; e.n++; need.set(k, e); }
-      for (const e of need.values()) if (this.nearby(p, e.ion, e.dir).length < e.n) return false;
-      members.forEach((m, i) => this.transfer(p, m.ion, m.dir * sgn, i * 0.12, (i - (members.length - 1) / 2) * 0.06));
+      const pr = this.protein(p);
+      if (pr.phase !== "idle") return false;
+      // the halves: ions that cross the same way travel together
+      const legs: Leg[] = [];
+      for (const m of members) {
+        const from: Where = m.dir * sgn > 0 ? "in" : "out";
+        let leg = legs.find((l) => l.from === from);
+        if (!leg) legs.push((leg = { ions: [], from }));
+        leg.ions.push(m.ion);
+      }
+      pr.legs = legs; pr.leg = 0; pr.atp = 0;
+      this.beginLeg(pr);
       return true;
     }, 12);
   }
+  private protein(p: number) {
+    let pr = this.prot.get(p);
+    if (!pr) this.prot.set(p, (pr = { o: 1, phase: "idle", t: 0, from: 1, to: 1, legs: [], leg: 0, bound: [], atp: 0, waited: 0, clock: 0 }));
+    return pr;
+  }
+  private beginLeg(pr: Protein) {
+    const side = pr.legs[pr.leg].from === "out" ? 1 : -1;
+    if (Math.sign(pr.o) !== side) { pr.phase = "toSide"; pr.t = 0; pr.from = pr.o; pr.to = side; } // rock over empty first
+    else { pr.phase = "wait"; pr.t = 0; pr.waited = 0; }
+  }
+  /** World position of a point in a pathway's own frame (x along the membrane, y inward). */
+  private local(p: number, g: ReturnType<CellStage["geometry"]>, lx: number, ly: number) {
+    const a = this.pathways[p].angle, k = g.k * 1.35, cx = g.cx + Math.cos(a) * g.R, cy = g.cy + Math.sin(a) * g.R;
+    return [cx + (-Math.sin(a) * lx - Math.cos(a) * ly) * k, cy + (Math.cos(a) * lx - Math.sin(a) * ly) * k];
+  }
+  private slotXY(p: number, g: ReturnType<CellStage["geometry"]>, pr: Protein, i: number) {
+    const n = pr.legs[pr.leg]?.ions.length ?? 1;
+    return this.local(p, g, (i - (n - 1) / 2) * 6.5, 0);
+  }
+  private stepProteins(dt: number, g: ReturnType<CellStage["geometry"]>) {
+    const ease = (u: number) => u * u * (3 - 2 * u);
+    for (const [p, pr] of this.prot) {
+      const pw = this.pathways[p];
+      if (!pw) continue;
+      pr.t += dt; pr.clock += dt; pr.atp = Math.max(0, pr.atp - dt);
+      const leg = pr.legs[pr.leg];
+      if (pr.phase === "toSide" || pr.phase === "rock") {
+        const D = pr.phase === "rock" ? 0.3 : 0.35, u = Math.min(1, pr.t / D);
+        pr.o = pr.from + (pr.to - pr.from) * ease(u);
+        if (u >= 1) {
+          if (pr.phase === "toSide") { pr.phase = "wait"; pr.t = 0; pr.waited = 0; }
+          else { pr.phase = "release"; pr.t = 0; }
+        }
+      } else if (pr.phase === "wait" || pr.phase === "bind") {
+        // the cleft is open on the binding side; each ion binds as one comes near (the reach widens slowly
+        // while a slot is empty, and the ion walks over at a dot's pace); it closes when every slot is full
+        if (pr.phase === "wait") { pr.bound = []; pr.phase = "bind"; pr.waited = 0; }
+        pr.waited += dt;
+        const dir = leg.from === "in" ? 1 : -1, reach = (80 + 40 * pr.waited) * g.k;
+        leg.ions.forEach((ion, i) => {
+          if (pr.bound.some((x) => x.slot === i)) return;
+          const c = this.nearby(p, ion, dir, reach)[0];
+          if (!c) return;
+          c.q.busy = true;
+          pr.bound.push({ q: c.q, slot: i, x0: c.q.x, y0: c.q.y, walk: Math.max(0.3, Math.min(1.4, c.d / 90)), start: pr.clock });
+        });
+        const full = pr.bound.length === leg.ions.length && pr.bound.every((x) => pr.clock - x.start >= x.walk);
+        if (full) { pr.phase = "close"; pr.t = 0; if (pw.kind === "pump" && pr.leg === 0) pr.atp = 0.7; }
+      } else if (pr.phase === "close") {
+        const u = Math.min(1, pr.t / 0.22);
+        pr.o = Math.sign(pr.o || 1) * (1 - ease(u)) || 0;
+        if (u >= 1) { const side = leg.from === "out" ? 1 : -1; pr.phase = "rock"; pr.t = 0; pr.from = 0; pr.to = -side; }
+      } else if (pr.phase === "release") {
+        // let them go one by one, into the other side, moving away from the membrane
+        const due = Math.min(pr.bound.length, Math.floor(pr.t / 0.09) + 1);
+        const dest: Where = leg.from === "in" ? "out" : "in", push = 28 + 2 * this.o.wander, a = pw.angle;
+        for (let i = 0; i < due; i++) {
+          const b = pr.bound[i];
+          if (!b.q.busy) continue;
+          const [x, y] = this.local(p, g, (b.slot - (leg.ions.length - 1) / 2) * 6.5, dest === "out" ? -20 : 20);
+          b.q.x = x; b.q.y = y; b.q.where = dest; b.q.busy = false;
+          const s = dest === "out" ? 1 : -1;
+          b.q.vx = Math.cos(a) * push * s; b.q.vy = Math.sin(a) * push * s;
+        }
+        if (due >= pr.bound.length && pr.t > 0.09 * pr.bound.length) {
+          pr.bound = []; pr.leg++;
+          if (pr.leg < pr.legs.length) this.beginLeg(pr);
+          else pr.phase = "idle";
+        }
+      }
+    }
+  }
+
   /** One-way crossings at the membrane-charge scale, in crossings per real second. */
   flowRim(p: number, ion: Species, efflux: number, influx: number, dt: number) {
     this.every(`${p}${ion}ro`, efflux, dt, () => this.rimCrossing(p, ion, +1), 16);
@@ -623,10 +719,11 @@ export class CellStage {
     const g = this.geometry();
     const key = `${Math.round(g.w / 3)}|${viewPref.view === "lens"}`;
     if (key !== this.lastKey) { // a resize or a change of view changes the dot scale: start the counts over
-      if (this.lastKey) { this.parts = []; this.moving = []; }
+      if (this.lastKey) { this.parts = []; this.moving = []; this.prot.clear(); }
       this.lastKey = key;
     }
     this.stepView(dt, g);
+    this.stepProteins(dt, g);
     for (const where of ["in", "out"] as const) {
       for (const ion of this.o.ions) {
         const live = this.parts.filter((q) => q.ion === ion && q.where === where && !q.dying && !q.busy);
@@ -765,6 +862,7 @@ export class CellStage {
     ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.stroke(); ctx.globalAlpha = 1;
     this.drawRim(ctx, g);
     this.pathways.forEach((pw) => this.drawPathway(ctx, g, pw));
+    if (!focus) this.drawBound(ctx, g);
     for (const m of this.moving) {
       if (m.delay > 0 || focus) continue; // crossings are at the bulk scale; the focus view has its own
       const [x, y] = this.pos(m, g);
@@ -998,6 +1096,26 @@ export class CellStage {
     tag(lens ? `each ± ≈ ${Math.round(IONS_PER_SIGN / 1000)},000 ions` : `each ± on the membrane ≈ ${Math.round(IONS_PER_SIGN / 1000)},000 ions`, sx, lens ? 52 : g.h - 11, al);
     if (this.thinning > 1.5 && !lens) tag(`clock this fast: 1 in ${Math.round(this.thinning)} crossings shown, both ways alike`, sx, g.h - 45, al);
   }
+  /** Ions held by a transport protein: walking to its slots, then riding in the cleft until released. */
+  private drawBound(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
+    for (const [p, pr] of this.prot) {
+      if (!this.pathways[p]) continue;
+      if (pr.atp > 0) { // the pump's ATP → ADP, as it closes on its Na⁺: drawn upright, on the cytoplasm side
+        const [x, y] = this.local(p, g, 0, 30);
+        ctx.save(); ctx.globalAlpha = Math.min(1, pr.atp / 0.35);
+        ctx.font = "700 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.lineWidth = 3; ctx.strokeStyle = STAGE.bath; ctx.strokeText("ATP → ADP", x, y);
+        ctx.fillStyle = cssVar("--accent"); ctx.fillText("ATP → ADP", x, y);
+        ctx.restore();
+      }
+      for (const b of pr.bound) {
+        if (!b.q.busy) continue;
+        const [sx, sy] = this.slotXY(p, g, pr, b.slot);
+        const u = pr.phase === "bind" ? Math.min(1, (pr.clock - b.start) / b.walk) : 1, e = u * u * (3 - 2 * u);
+        glyph(ctx, b.q.ion, b.x0 + (sx - b.x0) * e, b.y0 + (sy - b.y0) * e, STAGE.crossR, 1);
+      }
+    }
+  }
   private drawPathway(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, pw: Pathway) {
     const k = g.k * 1.35;
     const x = g.cx + Math.cos(pw.angle) * g.R, y = g.cy + Math.sin(pw.angle) * g.R;
@@ -1011,14 +1129,30 @@ export class CellStage {
       ctx.beginPath(); ctx.roundRect(6, -12, 8, 24, 3); ctx.fill();
       ctx.globalAlpha = 1;
       if (!pw.open) { ctx.fillStyle = cssVar("--muted"); ctx.fillRect(-6, -2.5, 12, 5); }
-    } else if (pw.kind === "pump" || pw.kind === "pmca") {
-      ctx.fillStyle = pw.on === false ? STAGE.off : pw.kind === "pump" ? STAGE.pump : cssVar("--ca");
-      ctx.beginPath(); ctx.arc(0, 0, 16, 0, 2 * Math.PI); ctx.fill();
-      ctx.strokeStyle = "#0d1117"; ctx.lineWidth = 2.5;
-      for (let i = 0; i < 3; i++) { const a = (pw.phase || 0) + (i * 2 * Math.PI) / 3; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 14, Math.sin(a) * 14); ctx.stroke(); }
     } else {
-      ctx.fillStyle = pw.on === false ? STAGE.off : pw.kind === "nkcc1" ? STAGE.nkcc1 : STAGE.kcc2;
-      ctx.beginPath(); ctx.roundRect(-18, -12, 36, 24, 6); ctx.fill();
+      // a transport protein: a body with a binding cleft that opens to one face (docs/adr/0017)
+      const p = this.pathways.indexOf(pw), pr = this.prot.get(p);
+      let o = pr ? pr.o : 1;
+      if (pw.kind === "pmca") o = pw.on === false ? 0 : Math.sin(pw.phase || 0); // no Ca²⁺ dots to carry: it rocks at its rate
+      const fill = pw.on === false ? STAGE.off : pw.kind === "pump" ? STAGE.pump : pw.kind === "pmca" ? cssVar("--ca") : pw.kind === "nkcc1" ? STAGE.nkcc1 : STAGE.kcc2;
+      ctx.rotate(o * 0.16);
+      ctx.fillStyle = fill;
+      ctx.beginPath(); ctx.roundRect(-17, -15, 34, 30, 8); ctx.fill();
+      // the cleft: a dark wedge from the open face to the binding site
+      const open = Math.abs(o), face = o >= 0 ? -15 : 15;
+      if (open > 0.05) {
+        ctx.fillStyle = STAGE.bath;
+        ctx.beginPath(); ctx.moveTo(-9 * open - 2, face); ctx.lineTo(9 * open + 2, face); ctx.lineTo(4, 0); ctx.lineTo(-4, 0); ctx.closePath(); ctx.fill();
+      }
+      // the binding site: one slot per ion of this half-cycle, outlined until filled
+      const leg = pr?.legs[pr.leg];
+      if (leg && pr && pr.phase !== "idle") {
+        leg.ions.forEach((ion, i) => {
+          ctx.strokeStyle = color(ion); ctx.lineWidth = 1.2; ctx.globalAlpha = 0.9;
+          ctx.beginPath(); ctx.arc((i - (leg.ions.length - 1) / 2) * 6.5, 0, 2.6, 0, 2 * Math.PI); ctx.stroke();
+          ctx.globalAlpha = 1;
+        });
+      }
     }
     ctx.restore();
     if (pw.label) {

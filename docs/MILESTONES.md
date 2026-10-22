@@ -48,7 +48,8 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 
 | what | waits on | blocks |
 |---|---|---|
-| **Deploy the homeostat round** ([feedback](feedback/2026-10-22-homeostat.md)): faster clock, dials, the collapse scene, unclumped crossings; built, checked, not deployed | **Tony** | the live game |
+| **Deploy** the homeostat round ([feedback](feedback/2026-10-22-homeostat.md)) and the rocking transport proteins ([ADR-0017](adr/0017-transport-proteins-rock-they-do-not-spin.md)); built, checked, not deployed | **Tony** | the live site |
+| **Swap the tonydefazio.com tile**: it shows the old rotor pump; the rocker version is in the darkroom | **Tony**, via the tonydefazio.com session | the tile matching the site |
 | **Dials in the running-cell chapters?** Tony: "graphs are hard for some to get used to". The dials are built for the game; rundown, pumps and chloride could carry them too | **Tony** | |
 | **Voltage-dependent resting conductances** ([ADR-0015](adr/0015-resting-conductances-from-the-pyramidal-cell.md)): source decided (the pyramidal cell); the design is proposed, not built | **Tony**, to rule when built; proposed after the concentration view | the "What is the leak?" section and Rin readouts |
 | **Tile label (optional)**: at phone width "K⁺ leak" sits against the tile's top edge; move it down a few px and resend? | **Tony** | a cosmetic tile update |

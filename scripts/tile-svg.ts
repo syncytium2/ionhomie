@@ -17,7 +17,7 @@ import { DOT_DENSITY, IONS_PER_SIGN, STAGE } from "../src/views/stage-style.ts";
 // the stylesheet's own variables
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const v = (name: string) => { const m = new RegExp(`${name}:\\s*(#[0-9a-fA-F]{3,8})`).exec(css); if (!m) throw new Error(`no ${name} in styles.css`); return m[1]; };
-const COL = { na: v("--na"), k: v("--k"), cl: v("--cl"), a: v("--a"), membrane: v("--membrane"), text: v("--text"), bg: v("--bg") };
+const COL = { na: v("--na"), k: v("--k"), cl: v("--cl"), a: v("--a"), membrane: v("--membrane"), text: v("--text"), bg: v("--bg"), accent: v("--accent") };
 
 const W = 420, H = 210, CX = 210, CY = 104, R = 64, LOOP = 12;
 const K_SCALE = 1.35; // the stage's pathway scale at this cell size (k = 1)
@@ -73,7 +73,8 @@ const ANG = { K: -Math.PI / 2.6, Na: -Math.PI / 9, Cl: Math.PI * 0.22, pump: Mat
 const deg = (rad: number) => (rad * 180) / Math.PI;
 const place = (rad: number, inner2: string) => { const [x, y] = at(rad, R); return `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(deg(rad) + 90)}) scale(${K_SCALE})">${inner2}</g>`; };
 const channel = (cls: string, rad: number) => place(rad, `<rect class="gap" x="-6" y="-9" width="12" height="18"/><rect class="${cls} ch" x="-14" y="-12" width="8" height="24" rx="3"/><rect class="${cls} ch" x="6" y="-12" width="8" height="24" rx="3"/>`);
-const pump = place(ANG.pump, `<circle class="pump" r="16"/><g class="rotor"><path class="spoke" d="M0 0L14 0M0 0L-7 12.1M0 0L-7 -12.1"/></g>`);
+// the pump as the stage draws it (docs/adr/0017): a body whose binding cleft opens to one face and rocks
+const pump = place(ANG.pump, `<g class="rocker"><rect class="pump" x="-17" y="-15" width="34" height="30" rx="8"/><path class="cleft co" d="M-11 -15L11 -15L4 0L-4 0Z"/><path class="cleft ci" d="M-11 15L11 15L4 0L-4 0Z"/></g>`);
 const label = (t: string, rad: number) => { const [x, y] = at(rad, R + 40); return `<text class="lab" x="${f(x)}" y="${f(y)}">${t}</text>`; };
 
 // crossings: a straight run through the pathway, from R − 22 to R + 22 (stage: 16 and 22, × its scale)
@@ -96,6 +97,11 @@ times(n.Naout, 5.1).forEach((t) => cross("na", ANG.Na, +1, t, jit()));
 times(n.Cl, 0.4).forEach((t) => cross("cl", ANG.Cl, -1, t, jit()));
 times(n.Cl, 2.3).forEach((t) => cross("cl", ANG.Cl, +1, t, jit()));
 const PUMP_T = 5.4; // one cycle: 3 Na⁺ out together, then 2 K⁺ in together (as flowGroup() moves them)
+// the rock, timed to that cycle: open to the cytoplasm for the Na⁺; ATP → ADP; rock out and let them go; take the
+// 2 K⁺ from the bath; rock back in. Percent of the loop for each moment:
+const P = (t: number) => f((100 * t) / LOOP);
+const ROCK_OUT = [PUMP_T + 0.45, PUMP_T + 0.8], ROCK_IN = [PUMP_T + 2.55, PUMP_T + 2.9];
+const [atpX, atpY] = at(ANG.pump, R - 30 * K_SCALE);
 [-0.09, 0, 0.09].forEach((d, i) => cross("na", ANG.pump, +1, PUMP_T + i * 0.12, d));
 [-0.06, 0.06].forEach((d, i) => cross("k", ANG.pump, -1, PUMP_T + 1.9 + i * 0.12, d));
 
@@ -112,7 +118,7 @@ process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 
     Dots at the stage's density, ${DOT_DENSITY} per mM per 1000 px². Different from the stage, for a ${W}-wide tile:
     crossing dots r ${CROSS_R} (stage ${STAGE.crossR}); every ${RIM_EVERY === 2 ? "other" : RIM_EVERY + "th"} ± of the rim (each ≈ ${(RIM_EVERY * IONS_PER_SIGN).toLocaleString("en-US")} ions).
   The loop (${LOOP} s) is one steady state of the model's healthy cell (Vm ${(s.V * 1000).toFixed(1).replace("-", "−")} mV), one pump cycle per loop:
-    the Na⁺/K⁺ pump: 3 Na⁺ out, then 2 K⁺ in; its rotor turns as the stage's does;
+    the Na⁺/K⁺ pump: open to the cytoplasm, it takes 3 Na⁺ (ATP → ADP), rocks out and releases them, takes 2 K⁺ and rocks back;
     the K⁺ leak: ${n.Kout} out and ${n.Kin} in (net 2 out, which the pump returns);
     the Na⁺ leak: ${n.Nain} in and ${n.Naout} out (net 3 in, which the pump returns);
     the Cl⁻ leak: ${n.Cl} in and ${n.Cl} out (Cl⁻ sits at its reversal potential)${clFrac > 1.05 ? `, 1 in ${f(clFrac)} shown` : ""}.
@@ -123,14 +129,19 @@ process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 
 .na{fill:${COL.na};fill-opacity:.95}.k{fill:${COL.k};fill-opacity:.95}.cl{fill:${COL.cl};fill-opacity:.95}.a{fill:${COL.a};fill-opacity:.95}
 .ch{fill-opacity:.95}.mem{fill:none;stroke:${COL.membrane};stroke-width:${STAGE.membraneWidth};stroke-opacity:.9}
 .rp{stroke:${STAGE.rimPlus};stroke-width:1.6}.rn{stroke:${STAGE.rimMinus};stroke-width:1.6}
-.pump{fill:${STAGE.pump}}.spoke{stroke:${COL.bg};stroke-width:2.5;fill:none}
+.pump{fill:${STAGE.pump}}.cleft{fill:${STAGE.bath}}
+.atp{font:700 10px system-ui,-apple-system,"Segoe UI",sans-serif;fill:${COL.accent};text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:${STAGE.bath};stroke-width:3px;opacity:0}
 .lab{font:600 12px system-ui,-apple-system,"Segoe UI",sans-serif;fill:${COL.text};text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:${STAGE.bath};stroke-width:3px}
-.rotor{animation:rotor ${LOOP}s linear infinite}@keyframes rotor{to{transform:rotate(2040deg)}}
+.rocker{animation:rock ${LOOP}s linear infinite}.co{animation:co ${LOOP}s linear infinite}.ci{animation:ci ${LOOP}s linear infinite}.atp{animation:atp ${LOOP}s linear infinite}
+@keyframes rock{0%,${P(ROCK_OUT[0])}%{transform:rotate(-9deg)}${P(ROCK_OUT[1])}%,${P(ROCK_IN[0])}%{transform:rotate(9deg)}${P(ROCK_IN[1])}%,100%{transform:rotate(-9deg)}}
+@keyframes co{0%,${P(ROCK_OUT[0])}%{opacity:0}${P(ROCK_OUT[1])}%,${P(ROCK_IN[0])}%{opacity:1}${P(ROCK_IN[1])}%,100%{opacity:0}}
+@keyframes ci{0%,${P(ROCK_OUT[0] - 0.25)}%{opacity:1}${P(ROCK_OUT[0])}%,${P(ROCK_IN[1])}%{opacity:0}${P(ROCK_IN[1] + 0.25)}%,100%{opacity:1}}
+@keyframes atp{0%,${P(PUMP_T - 0.1)}%{opacity:0}${P(PUMP_T + 0.1)}%,${P(PUMP_T + 0.6)}%{opacity:1}${P(PUMP_T + 0.9)}%,100%{opacity:0}}
 @keyframes w0{50%{transform:translate(2px,-1.5px)}}@keyframes w1{50%{transform:translate(-1.5px,2px)}}@keyframes w2{50%{transform:translate(1.5px,1.5px)}}@keyframes w3{50%{transform:translate(-2px,-1px)}}@keyframes w4{50%{transform:translate(1px,-2px)}}
 .w0{animation:w0 6s ease-in-out infinite}.w1{animation:w1 7s ease-in-out infinite -1s}.w2{animation:w2 6s ease-in-out infinite -2s}.w3{animation:w3 8s ease-in-out infinite -3s}.w4{animation:w4 6s ease-in-out infinite -4s}
 ${keys.join("\n")}
 .still{opacity:0}
-@media (prefers-reduced-motion: reduce){.w,.rotor,.mv{animation:none}.mv{opacity:0}.still{opacity:1}}
+@media (prefers-reduced-motion: reduce){.w,.rocker,.co,.ci,.atp,.mv{animation:none}.mv,.co,.atp{opacity:0}.ci,.still{opacity:1}.rocker{transform:rotate(-9deg)}}
 </style>
 <rect class="bath" width="${W}" height="${H}" rx="8"/>
 ${dots.join("")}
@@ -141,6 +152,7 @@ ${rim.join("")}
 ${channel("k", ANG.K)}${channel("na", ANG.Na)}${channel("cl", ANG.Cl)}${pump}
 ${moving.join("\n")}
 <g class="still">${dot("k", stx, sty, CROSS_R)}${dot("na", snx, sny, CROSS_R)}</g>
+<text class="atp" x="${f(atpX)}" y="${f(atpY)}">ATP → ADP</text>
 ${label("K⁺ leak", ANG.K)}${label("Na⁺ leak", ANG.Na)}${label("Cl⁻ leak", ANG.Cl)}${label("Na⁺/K⁺ pump", ANG.pump)}
 </svg>
 `);
