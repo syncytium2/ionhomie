@@ -486,7 +486,7 @@ export interface Pathway {
   phase?: number;
 }
 type Where = "in" | "out";
-interface Particle { ion: Species; where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; busy: boolean }
+interface Particle { ion: Species; where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; busy: boolean; crossed?: number }
 interface Leg { ions: Species[]; from: Where }
 interface Bound { q: Particle; slot: number; x0: number; y0: number; walk: number; start: number }
 /** A transport protein's alternating-access cycle (docs/adr/0017): bind, close, rock, release. */
@@ -494,7 +494,10 @@ interface Protein {
   o: number; // which way the cleft opens: +1 outward, −1 inward, 0 closed (occluded)
   phase: "idle" | "toSide" | "wait" | "bind" | "close" | "rock" | "release";
   t: number; from: number; to: number; // the rock's start and end openness, for the phases that rock
-  legs: Leg[]; leg: number; bound: Bound[]; atp: number; waited: number; clock: number;
+  legs: Leg[]; leg: number; bound: Bound[]; waited: number; clock: number;
+  /** the ATPase's nucleotide site: phos while the pump carries its phosphate; adpT, s since ATP split; atpIn, s since a
+   *  fresh ATP began to dock (−1: the site is empty) */
+  phos: boolean; adpT: number; atpIn: number;
 }
 interface Crossing { p: number; ion: Species; dir: number; t: number; dur: number; walk?: number; part?: Particle; x0: number; y0: number; da: number; rim: boolean; delay: number }
 export interface StageOpts { height: number; ions: Species[]; mode: "fixed" | "amounts"; cellVolume: number; /** wander strength, px/√s (depiction only) */ wander: number }
@@ -575,7 +578,9 @@ export class CellStage {
     const [mx, my] = this.mouth(p, g, dir > 0 ? g.R - 16 * g.k : g.R + 16 * g.k);
     const reach = reachPx ?? 80 * g.k;
     return this.parts
-      .filter((q) => q.ion === ion && q.where === from && !q.dying && !q.busy)
+      // a dot that has just crossed rests ~3 s first, so the same dot does not shuttle in and out of a pore
+      // (Tony: "chloride ions never leave the chloride leak channel")
+      .filter((q) => q.ion === ion && q.where === from && !q.dying && !q.busy && (q.crossed === undefined || this.clock - q.crossed > 3))
       .map((q) => ({ q, d: Math.hypot(q.x - mx, q.y - my) }))
       .filter((c) => c.d < reach)
       .sort((x, y) => x.d - y.d);
@@ -630,14 +635,16 @@ export class CellStage {
         if (!leg) legs.push((leg = { ions: [], from }));
         leg.ions.push(m.ion);
       }
-      pr.legs = legs; pr.leg = 0; pr.atp = 0;
+      pr.legs = legs; pr.leg = 0;
       this.beginLeg(pr);
       return true;
     }, 12);
   }
   private protein(p: number) {
     let pr = this.prot.get(p);
-    if (!pr) this.prot.set(p, (pr = { o: 1, phase: "idle", t: 0, from: 1, to: 1, legs: [], leg: 0, bound: [], atp: 0, waited: 0, clock: 0 }));
+    // the pump rests open to the cytoplasm with ATP bound, waiting for Na⁺ (E1); a cotransporter rests open outward
+    const o = this.pathways[p]?.kind === "pump" ? -1 : 1;
+    if (!pr) this.prot.set(p, (pr = { o, phase: "idle", t: 0, from: o, to: o, legs: [], leg: 0, bound: [], waited: 0, clock: 0, phos: false, adpT: 99, atpIn: 99 }));
     return pr;
   }
   private beginLeg(pr: Protein) {
@@ -659,7 +666,7 @@ export class CellStage {
     for (const [p, pr] of this.prot) {
       const pw = this.pathways[p];
       if (!pw) continue;
-      pr.t += dt; pr.clock += dt; pr.atp = Math.max(0, pr.atp - dt);
+      pr.t += dt; pr.clock += dt; pr.adpT += dt; if (pr.atpIn >= 0) pr.atpIn += dt;
       const leg = pr.legs[pr.leg];
       if (pr.phase === "toSide" || pr.phase === "rock") {
         const D = pr.phase === "rock" ? 0.3 : 0.35, u = Math.min(1, pr.t / D);
@@ -682,7 +689,11 @@ export class CellStage {
           pr.bound.push({ q: c.q, slot: i, x0: c.q.x, y0: c.q.y, walk: Math.max(0.3, Math.min(1.4, c.d / 90)), start: pr.clock });
         });
         const full = pr.bound.length === leg.ions.length && pr.bound.every((x) => pr.clock - x.start >= x.walk);
-        if (full) { pr.phase = "close"; pr.t = 0; if (pw.kind === "pump" && pr.leg === 0) pr.atp = 0.7; }
+        if (full) {
+          pr.phase = "close"; pr.t = 0;
+          // closing on its Na⁺, the pump splits its ATP: the phosphate stays on the pump, ADP leaves
+          if (pw.kind === "pump" && pr.leg === 0) { pr.phos = true; pr.adpT = 0; pr.atpIn = -1; }
+        }
       } else if (pr.phase === "close") {
         const u = Math.min(1, pr.t / 0.22);
         pr.o = Math.sign(pr.o || 1) * (1 - ease(u)) || 0;
@@ -695,14 +706,18 @@ export class CellStage {
           const b = pr.bound[i];
           if (!b.q.busy) continue;
           const [x, y] = this.local(p, g, (b.slot - (leg.ions.length - 1) / 2) * 6.5, dest === "out" ? -20 : 20);
-          b.q.x = x; b.q.y = y; b.q.where = dest; b.q.busy = false;
+          b.q.x = x; b.q.y = y; b.q.where = dest; b.q.busy = false; b.q.crossed = this.clock;
           const s = dest === "out" ? 1 : -1;
           b.q.vx = Math.cos(a) * push * s; b.q.vy = Math.sin(a) * push * s;
         }
         if (due >= pr.bound.length && pr.t > 0.09 * pr.bound.length) {
           pr.bound = []; pr.leg++;
           if (pr.leg < pr.legs.length) this.beginLeg(pr);
-          else pr.phase = "idle";
+          else {
+            pr.phase = "idle";
+            // back on the cytoplasm side with its K⁺ delivered: the phosphate goes, and a fresh ATP docks
+            if (pw.kind === "pump") { pr.phos = false; pr.atpIn = 0; }
+          }
         }
       }
     }
@@ -777,7 +792,7 @@ export class CellStage {
         // let it go moving away from the membrane, so crossed dots spread into the compartment instead of
         // piling up at the pore's mouth (Tony: "they're all stuck by the na leak channel")
         const a = this.pathways[m.p].angle + m.da, push = 28 + 2 * this.o.wander;
-        q.x = ex; q.y = ey; q.vx = Math.cos(a) * push * m.dir; q.vy = Math.sin(a) * push * m.dir; q.where = m.dir > 0 ? "out" : "in"; q.busy = false;
+        q.x = ex; q.y = ey; q.vx = Math.cos(a) * push * m.dir; q.vy = Math.sin(a) * push * m.dir; q.where = m.dir > 0 ? "out" : "in"; q.busy = false; q.crossed = this.clock;
       }
     }
     this.moving = this.moving.filter((m) => m.t < 1);
@@ -856,12 +871,14 @@ export class CellStage {
     ctx.fillStyle = STAGE.cyto; ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.fill();
     const focus = view === "focus";
     if (focus) this.drawFocusHaze(ctx, g);
-    for (const q of this.parts) if (!q.busy) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? STAGE.aR : STAGE.dotR, Math.max(0, q.a) * (focus ? 0.1 : 0.95));
-    if (focus) for (const d of this.vdots) glyph(ctx, d.ion, d.x, d.y, 3.4, Math.max(0, d.a));
+    // the membrane, its charge and its proteins first; then every ion on top, so none hides behind a pore
+    // (Tony: "the pore is a black rectangle that some ions can hide behind or get cutoff")
     ctx.strokeStyle = cssVar("--membrane"); ctx.lineWidth = STAGE.membraneWidth; ctx.globalAlpha = 0.9;
     ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.stroke(); ctx.globalAlpha = 1;
     this.drawRim(ctx, g);
     this.pathways.forEach((pw) => this.drawPathway(ctx, g, pw));
+    for (const q of this.parts) if (!q.busy) glyph(ctx, q.ion, q.x, q.y, q.ion === "A" ? STAGE.aR : STAGE.dotR, Math.max(0, q.a) * (focus ? 0.1 : 0.95));
+    if (focus) for (const d of this.vdots) glyph(ctx, d.ion, d.x, d.y, 3.4, Math.max(0, d.a));
     if (!focus) this.drawBound(ctx, g);
     for (const m of this.moving) {
       if (m.delay > 0 || focus) continue; // crossings are at the bulk scale; the focus view has its own
@@ -1100,14 +1117,8 @@ export class CellStage {
   private drawBound(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
     for (const [p, pr] of this.prot) {
       if (!this.pathways[p]) continue;
-      if (pr.atp > 0) { // the pump's ATP → ADP, as it closes on its Na⁺: drawn upright, on the cytoplasm side
-        const [x, y] = this.local(p, g, 0, 30);
-        ctx.save(); ctx.globalAlpha = Math.min(1, pr.atp / 0.35);
-        ctx.font = "700 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.lineWidth = 3; ctx.strokeStyle = STAGE.bath; ctx.strokeText("ATP → ADP", x, y);
-        ctx.fillStyle = cssVar("--accent"); ctx.fillText("ATP → ADP", x, y);
-        ctx.restore();
-      }
+      const pw = this.pathways[p];
+      if (pw.kind === "pump" || pw.kind === "pmca") this.drawNucleotide(ctx, g, p, pw, pr);
       for (const b of pr.bound) {
         if (!b.q.busy) continue;
         const [sx, sy] = this.slotXY(p, g, pr, b.slot);
@@ -1115,6 +1126,45 @@ export class CellStage {
         glyph(ctx, b.q.ion, b.x0 + (sx - b.x0) * e, b.y0 + (sy - b.y0) * e, STAGE.crossR, 1);
       }
     }
+  }
+  /**
+   * An ATPase's nucleotide site, on its cytoplasmic domain, always visible: ATP docked; split, with ADP drifting away
+   * into the cytoplasm and the phosphate (P) riding on the pump; empty while it carries the phosphate, or when the
+   * pump is stopped. Cotransporters have none: that is how the eye tells them apart (docs/adr/0018).
+   */
+  private drawNucleotide(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, p: number, pw: Pathway, pr: Protein) {
+    const accent = cssVar("--accent");
+    const pill = (label: string, lx: number, ly: number, alpha: number, filled: boolean) => {
+      const [x, y] = this.local(p, g, lx, ly);
+      ctx.save(); ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.roundRect(x - 13, y - 6.5, 26, 13, 6.5);
+      if (filled) { ctx.fillStyle = accent; ctx.fill(); }
+      else { ctx.setLineDash([2.5, 2]); ctx.strokeStyle = accent; ctx.lineWidth = 1.2; ctx.stroke(); }
+      if (filled) { ctx.fillStyle = "#0d1117"; ctx.font = "700 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, x, y + 0.5); }
+      ctx.restore();
+    };
+    const stopped = pw.on === false;
+    // PMCA has no ions drawn to carry: its phosphate follows its rock (phosphorylated while open outward)
+    const phos = pw.kind === "pmca" ? !stopped && Math.sin(pw.phase || 0) > 0 : pr.phos;
+    const atpIn = pw.kind === "pmca" ? (phos ? -1 : 99) : pr.atpIn;
+    if (stopped || atpIn < 0) pill("", 0, 25, 0.75, false); // the empty site
+    else if (atpIn < 0.6) { const u = atpIn / 0.6; pill("ATP", 6 * (1 - u), 25 + 26 * (1 - u), u, true); } // a fresh ATP arriving
+    else pill("ATP", 0, 25, 1, true);
+    if (pw.kind === "pump" && pr.adpT < 1.3) { const u = pr.adpT / 1.3; pill("ADP", -10 * u, 25 + 34 * u, 1 - u, true); } // ADP leaving
+    if (phos && !stopped) { // the phosphate on the pump
+      const [x, y] = this.local(p, g, 15, 9);
+      ctx.save(); ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = "#0d1117"; ctx.font = "800 8px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("P", x, y + 0.5);
+      ctx.restore();
+    }
+  }
+  /** The ions a protein's binding site holds, shown as hollow rings whether or not they are filled. */
+  private siteIons(pw: Pathway, pr: Protein | undefined): Species[] {
+    if (pr && pr.phase !== "idle" && pr.legs[pr.leg]) return pr.legs[pr.leg].ions;
+    if (pw.kind === "pump") return (pr ? pr.o : -1) < 0 ? ["Na", "Na", "Na"] : ["K", "K"];
+    if (pw.kind === "nkcc1") return ["Na", "K", "Cl", "Cl"];
+    if (pw.kind === "kcc2") return ["K", "Cl"];
+    return ["Ca"];
   }
   private drawPathway(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, pw: Pathway) {
     const k = g.k * 1.35;
@@ -1131,11 +1181,16 @@ export class CellStage {
       if (!pw.open) { ctx.fillStyle = cssVar("--muted"); ctx.fillRect(-6, -2.5, 12, 5); }
     } else {
       // a transport protein: a body with a binding cleft that opens to one face (docs/adr/0017)
-      const p = this.pathways.indexOf(pw), pr = this.prot.get(p);
+      const p = this.pathways.indexOf(pw), pr = this.prot.get(p) ?? (pw.kind === "pmca" ? undefined : this.protein(p));
       let o = pr ? pr.o : 1;
       if (pw.kind === "pmca") o = pw.on === false ? 0 : Math.sin(pw.phase || 0); // no Ca²⁺ dots to carry: it rocks at its rate
       const fill = pw.on === false ? STAGE.off : pw.kind === "pump" ? STAGE.pump : pw.kind === "pmca" ? cssVar("--ca") : pw.kind === "nkcc1" ? STAGE.nkcc1 : STAGE.kcc2;
       ctx.rotate(o * 0.16);
+      const atpase = pw.kind === "pump" || pw.kind === "pmca";
+      if (atpase) { // the P-type ATPases' cytoplasmic domain, where ATP binds: the pump's tell
+        ctx.fillStyle = fill; ctx.globalAlpha = 0.75;
+        ctx.beginPath(); ctx.roundRect(-14, 10, 28, 22, 9); ctx.fill(); ctx.globalAlpha = 1;
+      }
       ctx.fillStyle = fill;
       ctx.beginPath(); ctx.roundRect(-17, -15, 34, 30, 8); ctx.fill();
       // the cleft: a dark wedge from the open face to the binding site
@@ -1144,15 +1199,13 @@ export class CellStage {
         ctx.fillStyle = STAGE.bath;
         ctx.beginPath(); ctx.moveTo(-9 * open - 2, face); ctx.lineTo(9 * open + 2, face); ctx.lineTo(4, 0); ctx.lineTo(-4, 0); ctx.closePath(); ctx.fill();
       }
-      // the binding site: one slot per ion of this half-cycle, outlined until filled
-      const leg = pr?.legs[pr.leg];
-      if (leg && pr && pr.phase !== "idle") {
-        leg.ions.forEach((ion, i) => {
-          ctx.strokeStyle = color(ion); ctx.lineWidth = 1.2; ctx.globalAlpha = 0.9;
-          ctx.beginPath(); ctx.arc((i - (leg.ions.length - 1) / 2) * 6.5, 0, 2.6, 0, 2 * Math.PI); ctx.stroke();
-          ctx.globalAlpha = 1;
-        });
-      }
+      // the binding site: a hollow ring per ion it carries, always shown; a bound ion fills its ring
+      const ions = this.siteIons(pw, pr);
+      ions.forEach((ion, i) => {
+        ctx.strokeStyle = color(ion); ctx.lineWidth = 1.4; ctx.globalAlpha = 0.95;
+        ctx.beginPath(); ctx.arc((i - (ions.length - 1) / 2) * 6.5, 0, 2.8, 0, 2 * Math.PI); ctx.stroke();
+        ctx.globalAlpha = 1;
+      });
     }
     ctx.restore();
     if (pw.label) {

@@ -16,8 +16,10 @@ export const STAGE = {
   rimMinus: "#9ad1ff", // a − of membrane charge
   pump: "#b9a3ff", // the Na⁺/K⁺-ATPase
   off: "#3a3a3a", // a pump or transporter that is not running
-  nkcc1: "#7fb069",
-  kcc2: "#e07a5f",
+  // the cotransporters share one cool gray that no ion uses (Tony: "kcc2 is the same color as chloride"); their
+  // labels and binding rings tell them apart, and the pump's lavender, ATP domain and ATP set it apart from both
+  nkcc1: "#8e9aaf",
+  kcc2: "#8e9aaf",
   membraneWidth: 8, // px, drawn at 0.9 opacity
   dotR: 2.8, // a bulk dot (cations' and anions' size parameter)
   aR: 3.4, // an A⁻ dot

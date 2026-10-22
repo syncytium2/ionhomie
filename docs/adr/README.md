@@ -53,3 +53,4 @@ change so the two never disagree.
 | [0015](0015-resting-conductances-from-the-pyramidal-cell.md) | Resting conductances come from gaba_excites's pyramidal cell | Accepted in part (Tony chose the source; the rest is proposed, not built) |
 | [0016](0016-the-learner-picks-how-the-stage-shows-concentrations.md) | The learner picks how the stage shows concentrations | Accepted (Tony chose all three; the forms are Claude's) |
 | [0017](0017-transport-proteins-rock-they-do-not-spin.md) | Transport proteins rock between faces; they do not spin | Accepted (Tony asked; the form is Claude's, as advised) |
+| [0018](0018-the-pump-carries-its-atp.md) | The pump carries its ATP; transporters are gray; binding sites always show | Accepted (Tony asked; the forms are Claude's) |

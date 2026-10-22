@@ -25,3 +25,10 @@ Built 2026-10-22, deployed in v0.1.6:
 
 It had been advised, not built. Built 2026-10-22 as [ADR-0017](../adr/0017-transport-proteins-rock-they-do-not-spin.md): bind,
 close (ATP → ADP on the pump), rock, release; no rotors. Deployed in v0.1.6.
+
+> *"we need to distinguish the transporters from the pump. ATP just flashes for a moment think of how to show it continuously.
+> binding sites on all three should persist with hollow rings."* · *"kcc2 is the same color as chloride i think"* ·
+> *"chloride ions never leave the chloride leak channel. also noted the pore is a black rectangle that some ions can hide behind
+> or get cutoff"*
+
+Built 2026-10-22 as [ADR-0018](../adr/0018-the-pump-carries-its-atp.md). Not deployed.
