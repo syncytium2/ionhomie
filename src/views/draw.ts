@@ -363,6 +363,19 @@ export class Trace {
   }
 }
 
+/** Where an ATPase's star-shaped ATP site sits, in the protein's own frame (x along the membrane, y inward): a corner
+ *  of its cytoplasmic face, clear of the binding cleft. Its phosphate (P) rides at the mirror corner. */
+const SITE_X = 11, SITE_Y = 9;
+/** A star with n points, outer radius r, inner radius ri, drawn as the current path (not filled or stroked). */
+export function starPath(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, ri: number, n = 5, rot = -Math.PI / 2) {
+  ctx.beginPath();
+  for (let i = 0; i < 2 * n; i++) {
+    const a = rot + (i * Math.PI) / n, rr = i % 2 ? ri : r;
+    if (i === 0) ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); else ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+}
+
 // ---------- dials: a value at a glance, for readers who do not read graphs ----------
 export interface DialSpec {
   label: string; value: number; min: number; max: number;
@@ -526,8 +539,8 @@ export class CellStage {
   }
   geometry() {
     const w = Math.max(50, this.c.clientWidth), h = this.o.height;
-    const lens = viewPref.view === "lens";
-    // in the magnifier view the cell moves left and shrinks; the lens takes the right
+    const lens = viewPref.view === "lens" || viewPref.view === "census";
+    // in the magnifier and census views the cell moves left and shrinks; the panel takes the right
     const R0 = lens ? Math.min(w * 0.19, h * 0.32) : Math.min(w, h) * 0.34;
     const R = Math.min(R0 * Math.cbrt(Math.max(0.2, this.volumeRel)), lens ? w * 0.22 : Math.min(w, h) * 0.47);
     return { w, h, cx: lens ? w * 0.24 : w / 2, cy: h / 2, R, R0, k: Math.max(1, Math.min(1.7, R0 / 105)) };
@@ -732,7 +745,7 @@ export class CellStage {
   step(dt: number) {
     if (!(dt > 0)) return;
     const g = this.geometry();
-    const key = `${Math.round(g.w / 3)}|${viewPref.view === "lens"}`;
+    const key = `${Math.round(g.w / 3)}|${viewPref.view === "lens" || viewPref.view === "census"}`;
     if (key !== this.lastKey) { // a resize or a change of view changes the dot scale: start the counts over
       if (this.lastKey) { this.parts = []; this.moving = []; this.prot.clear(); }
       this.lastKey = key;
@@ -866,7 +879,6 @@ export class CellStage {
     const g = this.geometry();
     const { ctx } = fit(this.c, this.o.height);
     const view = viewPref.view;
-    if (view === "census") { this.drawCensus(ctx, g); return; }
     ctx.fillStyle = STAGE.bath; ctx.fillRect(0, 0, g.w, g.h);
     ctx.fillStyle = STAGE.cyto; ctx.beginPath(); ctx.arc(g.cx, g.cy, g.R, 0, 2 * Math.PI); ctx.fill();
     const focus = view === "focus";
@@ -896,15 +908,9 @@ export class CellStage {
     if (focus) this.drawFocusLabels(ctx, g);
     else this.drawScale(ctx, g);
     if (view === "lens") this.drawLens(ctx, g);
+    if (view === "census") this.drawCensus(ctx, g);
   }
   // ---------- the three other views (docs/adr/0016) ----------
-  private censusLayout(g: ReturnType<CellStage["geometry"]>) {
-    const narrow = g.w < 640;
-    const s = narrow ? Math.min((g.w - 60) / 2 / 1.45, g.h * 0.26) : Math.min(g.h * 0.5, g.w * 0.19);
-    const d = s * 0.45, y = narrow ? 30 : 46;
-    const inX = 18, outX = inX + s * 1.45 + (narrow ? 14 : 34);
-    return { s, d, y, inX, outX, narrow, tableX: narrow ? 18 : outX + s * 1.45 + 34, tableY: narrow ? y + s + d + 62 : 70 };
-  }
   private lensLayout(g: ReturnType<CellStage["geometry"]>) {
     const bx = g.w * 0.47, by = 12, bw = g.w - bx - 10, bh = g.h - 24, mid = bx + bw / 2;
     return { bx, by, bw, bh, mid, inR: [bx + 8, by + 34, bw / 2 - 22, bh - 84], outR: [mid + 14, by + 34, bw / 2 - 22, bh - 84] };
@@ -912,7 +918,7 @@ export class CellStage {
   /** Where a view's dot may sit: a rectangle, or inside / outside the cell. */
   private region(where: Where, g: ReturnType<CellStage["geometry"]>): number[] | "in" | "out" {
     const v = viewPref.view;
-    if (v === "census") { const L = this.censusLayout(g); return [L.inX + 6, L.y + L.d + 6, L.s - 12, L.s - 12]; }
+    if (v === "census") { const L = this.lensLayout(g); return where === "in" ? L.inR : L.outR; }
     if (v === "lens") { const L = this.lensLayout(g); return where === "in" ? L.inR : L.outR; }
     return where;
   }
@@ -1009,51 +1015,39 @@ export class CellStage {
     const big = (x: number) => (x >= 1e9 ? (x / 1e9).toFixed(1) + " billion" : x >= 1e6 ? (x / 1e6).toFixed(1) + " million" : Math.round(x).toLocaleString("en-US"));
     this.tag(ctx, `this view: each ${LABEL[f.ion]} dot ≈ ${big(ipd)} ions`, g.w - 10, g.h - 10, "right");
   }
+  /**
+   * The census, in the magnifier's layout (docs/adr/0016): a marker on the cell, and a panel showing one cubic
+   * micrometer on each side of the membrane with real counts. Inside, every free Ca²⁺ is drawn, one ring per ion.
+   */
   private drawCensus(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
-    ctx.fillStyle = STAGE.bath; ctx.fillRect(0, 0, g.w, g.h);
-    const L = this.censusLayout(g), muted = cssVar("--muted");
-    const cube = (ox: number, label: string, fill: string) => {
-      const { s, d, y } = L;
-      ctx.save(); ctx.fillStyle = fill; ctx.strokeStyle = muted; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.rect(ox, y + d, s, s); ctx.fill(); ctx.stroke();
-      ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.moveTo(ox, y + d); ctx.lineTo(ox + d, y); ctx.lineTo(ox + s + d, y); ctx.lineTo(ox + s, y + d); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
-      ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.moveTo(ox + s, y + d); ctx.lineTo(ox + s + d, y); ctx.lineTo(ox + s + d, y + s); ctx.lineTo(ox + s, y + s + d); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
-      ctx.restore();
-      this.tag(ctx, label, ox + s / 2, y + s + d + 16, "center", cssVar("--text"), "600 12px system-ui, sans-serif");
-      this.tag(ctx, "1 µm", ox + s / 2, y + d + s - 10, "center");
-    };
-    cube(L.inX, "inside", STAGE.cyto);
-    cube(L.outX, "outside", STAGE.bath);
-    const ciCa = this.inside.Ca, coCa = this.outside.Ca;
+    const L = this.lensLayout(g), acc = cssVar("--accent"), narrow = g.w < 640;
+    const mx = g.cx + g.R, my = g.cy, ms = 10 * g.k;
+    ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.strokeRect(mx - ms, my - ms, 2 * ms, 2 * ms);
+    ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(mx + ms, my - ms); ctx.lineTo(L.bx, L.by); ctx.moveTo(mx + ms, my + ms); ctx.lineTo(L.bx, L.by + L.bh); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.roundRect(L.bx, L.by, L.bw, L.bh, 12); ctx.clip();
+    ctx.fillStyle = STAGE.cyto; ctx.fillRect(L.bx, L.by, L.bw / 2, L.bh);
+    ctx.fillStyle = STAGE.bath; ctx.fillRect(L.mid, L.by, L.bw / 2, L.bh);
+    ctx.fillStyle = cssVar("--membrane"); ctx.fillRect(L.mid - 7, L.by, 14, L.bh);
+    const coCa = this.outside.Ca, ciCa = this.inside.Ca;
+    if (coCa !== undefined) this.haze(ctx, "Ca", () => ctx.rect(L.outR[0], L.outR[1], L.outR[2], L.outR[3]), L.outR);
+    // every free Ca²⁺ ion inside, one ring each (a dot elsewhere is billions; here a ring is one ion)
+    ctx.strokeStyle = color("Ca"); ctx.lineWidth = 1.6;
+    for (const d of this.vdots) { ctx.globalAlpha = Math.max(0, d.a); ctx.beginPath(); ctx.arc(d.x, d.y, 3.2, 0, 2 * Math.PI); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(L.bx, L.by, L.bw, L.bh, 12); ctx.stroke();
     const fmt = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(1) + " million" : n >= 1e4 ? Math.round(n / 1000) + " thousand" : Math.round(n).toLocaleString("en-US"));
-    if (ciCa !== undefined) {
-      const n = ciCa * IONS_PER_UM3_PER_MM;
-      if (n > 500) this.haze(ctx, "Ca", () => ctx.rect(L.inX, L.y + L.d, L.s, L.s), [L.inX, L.y + L.d, L.s, L.s]);
-      for (const d of this.vdots) glyph(ctx, "Ca", d.x, d.y, 3.2, Math.max(0, d.a));
-      this.tag(ctx, `${fmt(n)} Ca²⁺${n <= 500 && !L.narrow ? ", every one drawn" : ""}`, L.inX + L.s / 2, L.y + L.d + 14, "center", color("Ca"), "700 12px system-ui, sans-serif");
-    }
-    if (coCa !== undefined) {
-      this.haze(ctx, "Ca", () => ctx.rect(L.outX, L.y + L.d, L.s, L.s), [L.outX, L.y + L.d, L.s, L.s]);
-      this.tag(ctx, `${fmt(coCa * IONS_PER_UM3_PER_MM)} Ca²⁺`, L.outX + L.s / 2, L.y + L.d + 14, "center", color("Ca"), "700 12px system-ui, sans-serif");
-    }
-    // every ion, counted in one cubic micrometer, on a log scale
-    const rows: [Species, number | undefined, number | undefined][] = [["K", this.inside.K, this.outside.K], ["Na", this.inside.Na, this.outside.Na], ["Cl", this.inside.Cl, this.outside.Cl], ["Ca", ciCa, coCa]];
-    const bar = (n: number) => Math.max(0, (Math.log10(Math.max(n, 1)) - 1) / 7) * (L.narrow ? 70 : 110);
-    let ty = L.tableY;
-    const cIn = L.tableX + 46, cOut = cIn + (L.narrow ? 140 : 170);
-    ctx.textAlign = "left"; ctx.textBaseline = "middle";
-    ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = muted;
-    ctx.fillText("ions in 1 µm³", L.tableX, ty - 30); ctx.fillText("inside", cIn, ty - 12); ctx.fillText("outside", cOut, ty - 12);
-    for (const [ion, ci, co] of rows) {
-      if (ci === undefined || co === undefined) continue;
-      const ni = ci * IONS_PER_UM3_PER_MM, no = co * IONS_PER_UM3_PER_MM;
-      ctx.fillStyle = color(ion); ctx.font = "600 13px system-ui, sans-serif"; ctx.fillText(LABEL[ion], L.tableX, ty + 8);
-      ctx.fillRect(cIn, ty, bar(ni), 7); ctx.strokeStyle = color(ion); ctx.lineWidth = 1.3; ctx.strokeRect(cOut, ty, bar(no), 7);
-      ctx.font = "11px ui-monospace, Menlo, monospace"; ctx.fillStyle = cssVar("--text"); ctx.fillText(fmt(ni), cIn, ty + 18);
-      ctx.fillStyle = muted; ctx.fillText(fmt(no), cOut, ty + 18);
-      ty += L.narrow ? 30 : 52;
-    }
-    if (!L.narrow) this.tag(ctx, "one cubic micrometer, inside and out: real counts, from the model now", g.w - 10, g.h - 10, "right");
+    this.tag(ctx, narrow ? "in, 1 µm³" : "inside: one cubic micrometer", L.bx + L.bw / 4, L.by + 16, "center", cssVar("--text"));
+    this.tag(ctx, narrow ? "out, 1 µm³" : "outside: one cubic micrometer", L.mid + L.bw / 4, L.by + 16, "center", cssVar("--text"));
+    if (ciCa !== undefined) this.tag(ctx, `${fmt(ciCa * IONS_PER_UM3_PER_MM)} Ca²⁺${narrow ? "" : ", each ring one ion"}`, L.bx + L.bw / 4, L.by + 38, "center", color("Ca"), "700 12px system-ui, sans-serif");
+    if (coCa !== undefined) this.tag(ctx, `${fmt(coCa * IONS_PER_UM3_PER_MM)} Ca²⁺`, L.mid + L.bw / 4, L.by + 38, "center", color("Ca"), "700 12px system-ui, sans-serif");
+    // the other ions, counted, at the foot of each half
+    const rows: Species[] = ["K", "Na", "Cl"];
+    rows.forEach((ion, i) => {
+      const ci = this.inside[ion], co = this.outside[ion], y = L.by + L.bh - 14 - (rows.length - 1 - i) * 18;
+      if (ci !== undefined) this.tag(ctx, `${LABEL[ion]} ${fmt(ci * IONS_PER_UM3_PER_MM)}`, L.bx + L.bw / 4, y, "center", color(ion));
+      if (co !== undefined) this.tag(ctx, `${LABEL[ion]} ${fmt(co * IONS_PER_UM3_PER_MM)}`, L.mid + L.bw / 4, y, "center", color(ion));
+    });
   }
   private drawLens(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>) {
     const L = this.lensLayout(g), acc = cssVar("--accent");
@@ -1108,7 +1102,7 @@ export class CellStage {
     };
     tag("outside (bath)", 10, 14, "left");
     tag("inside", g.cx, g.cy - g.R + 22, "center");
-    const lens = viewPref.view === "lens", sx = lens ? 10 : g.w - 10, al: CanvasTextAlign = lens ? "left" : "right";
+    const lens = viewPref.view === "lens" || viewPref.view === "census", sx = lens ? 10 : g.w - 10, al: CanvasTextAlign = lens ? "left" : "right";
     tag(`each dot ≈ ${big(ipd)} ions`, sx, lens ? 34 : g.h - 28, al);
     tag(lens ? `each ± ≈ ${Math.round(IONS_PER_SIGN / 1000)},000 ions` : `each ± on the membrane ≈ ${Math.round(IONS_PER_SIGN / 1000)},000 ions`, sx, lens ? 52 : g.h - 11, al);
     if (this.thinning > 1.5 && !lens) tag(`clock this fast: 1 in ${Math.round(this.thinning)} crossings shown, both ways alike`, sx, g.h - 45, al);
@@ -1132,27 +1126,33 @@ export class CellStage {
    * into the cytoplasm and the phosphate (P) riding on the pump; empty while it carries the phosphate, or when the
    * pump is stopped. Cotransporters have none: that is how the eye tells them apart (docs/adr/0018).
    */
+  /** Whether ATP sits in a pump's star-shaped site right now. */
+  private atpDocked(pw: Pathway, pr: Protein) {
+    if (pw.on === false) return false;
+    if (pw.kind === "pmca") return Math.sin(pw.phase || 0) <= 0;
+    return pr.atpIn >= 0.6;
+  }
+  /**
+   * An ATPase's nucleotide, around its star-shaped site (docs/adr/0018): an ATP star waits in the cytoplasm and docks;
+   * as the pump closes on its Na⁺ the star breaks: one point stays on the pump as its phosphate (P), and the rest, a
+   * four-pointed ADP, drifts away; a fresh ATP waits and docks when the pump has come back. Drawn upright.
+   */
   private drawNucleotide(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, p: number, pw: Pathway, pr: Protein) {
+    if (pw.on === false) return; // a stopped pump: no ATP at hand (rundown), or none it can use (ouabain)
     const accent = cssVar("--accent");
-    const pill = (label: string, lx: number, ly: number, alpha: number, filled: boolean) => {
+    const star = (lx: number, ly: number, n: number, alpha: number, r = 5.2) => {
       const [x, y] = this.local(p, g, lx, ly);
-      ctx.save(); ctx.globalAlpha = alpha;
-      ctx.beginPath(); ctx.roundRect(x - 13, y - 6.5, 26, 13, 6.5);
-      if (filled) { ctx.fillStyle = accent; ctx.fill(); }
-      else { ctx.setLineDash([2.5, 2]); ctx.strokeStyle = accent; ctx.lineWidth = 1.2; ctx.stroke(); }
-      if (filled) { ctx.fillStyle = "#0d1117"; ctx.font = "700 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, x, y + 0.5); }
-      ctx.restore();
+      ctx.save(); ctx.globalAlpha = alpha; starPath(ctx, x, y, r, r * 0.44, n); ctx.fillStyle = accent; ctx.fill(); ctx.restore();
     };
-    const stopped = pw.on === false;
-    // PMCA has no ions drawn to carry: its phosphate follows its rock (phosphorylated while open outward)
-    const phos = pw.kind === "pmca" ? !stopped && Math.sin(pw.phase || 0) > 0 : pr.phos;
-    const atpIn = pw.kind === "pmca" ? (phos ? -1 : 99) : pr.atpIn;
-    if (stopped || atpIn < 0) pill("", 0, 25, 0.75, false); // the empty site
-    else if (atpIn < 0.6) { const u = atpIn / 0.6; pill("ATP", 6 * (1 - u), 25 + 26 * (1 - u), u, true); } // a fresh ATP arriving
-    else pill("ATP", 0, 25, 1, true);
-    if (pw.kind === "pump" && pr.adpT < 1.3) { const u = pr.adpT / 1.3; pill("ADP", -10 * u, 25 + 34 * u, 1 - u, true); } // ADP leaving
-    if (phos && !stopped) { // the phosphate on the pump
-      const [x, y] = this.local(p, g, 15, 9);
+    const pmca = pw.kind === "pmca";
+    const phos = pmca ? Math.sin(pw.phase || 0) > 0 : pr.phos;
+    const atpIn = pmca ? (phos ? -1 : 99) : pr.atpIn;
+    const bob = Math.sin(this.clock * 2.2 + p) * 1.5;
+    if (atpIn < 0) star(SITE_X + 4, 32 + bob, 5, 0.95); // ATP in waiting, in the cytoplasm beside the empty site
+    else if (atpIn < 0.6) { const u = atpIn / 0.6, e = u * u * (3 - 2 * u); star(SITE_X + 4 * (1 - e), 32 + (SITE_Y - 32) * e, 5, 1); } // docking
+    if (!pmca && pr.adpT < 1.4) { const u = pr.adpT / 1.4; star(SITE_X + 8 * u, SITE_Y + 34 * u, 4, 1 - u, 4.4); } // ADP leaving
+    if (phos) { // the phosphate, the point that broke off, riding on the pump
+      const [x, y] = this.local(p, g, -SITE_X, SITE_Y);
       ctx.save(); ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
       ctx.fillStyle = "#0d1117"; ctx.font = "800 8px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("P", x, y + 0.5);
       ctx.restore();
@@ -1181,18 +1181,21 @@ export class CellStage {
       if (!pw.open) { ctx.fillStyle = cssVar("--muted"); ctx.fillRect(-6, -2.5, 12, 5); }
     } else {
       // a transport protein: a body with a binding cleft that opens to one face (docs/adr/0017)
-      const p = this.pathways.indexOf(pw), pr = this.prot.get(p) ?? (pw.kind === "pmca" ? undefined : this.protein(p));
+      const p = this.pathways.indexOf(pw), pr = this.protein(p); // PMCA too, so its ATP is drawn
       let o = pr ? pr.o : 1;
       if (pw.kind === "pmca") o = pw.on === false ? 0 : Math.sin(pw.phase || 0); // no Ca²⁺ dots to carry: it rocks at its rate
       const fill = pw.on === false ? STAGE.off : pw.kind === "pump" ? STAGE.pump : pw.kind === "pmca" ? cssVar("--ca") : pw.kind === "nkcc1" ? STAGE.nkcc1 : STAGE.kcc2;
       ctx.rotate(o * 0.16);
       const atpase = pw.kind === "pump" || pw.kind === "pmca";
-      if (atpase) { // the P-type ATPases' cytoplasmic domain, where ATP binds: the pump's tell
-        ctx.fillStyle = fill; ctx.globalAlpha = 0.75;
-        ctx.beginPath(); ctx.roundRect(-14, 10, 28, 22, 9); ctx.fill(); ctx.globalAlpha = 1;
-      }
       ctx.fillStyle = fill;
       ctx.beginPath(); ctx.roundRect(-17, -15, 34, 30, 8); ctx.fill();
+      if (atpase) {
+        // the ATP site: a star-shaped cutout on the cytoplasmic face (docs/adr/0018); an ATP star fills it when docked
+        starPath(ctx, SITE_X, SITE_Y, 5.4, 2.4); ctx.fillStyle = STAGE.bath; ctx.fill();
+        if (this.atpDocked(pw, pr)) {
+          starPath(ctx, SITE_X, SITE_Y, 4.8, 2.1); ctx.fillStyle = cssVar("--accent"); ctx.fill();
+        }
+      }
       // the cleft: a dark wedge from the open face to the binding site
       const open = Math.abs(o), face = o >= 0 ? -15 : 15;
       if (open > 0.05) {

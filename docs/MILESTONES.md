@@ -49,8 +49,8 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 
 | what | waits on | blocks |
 |---|---|---|
-| **Deploy** the pump-and-transporter round ([ADR-0018](adr/0018-the-pump-carries-its-atp.md)): ATP domain and continuous ATP, persistent rings, gray cotransporters, no Cl⁻ shuttling, ions above pores. Built, checked, not deployed | **Tony** | the live site |
-| **Swap the tonydefazio.com tile**: live there is 1.11.2, the rocker tile matching ionhomie v0.1.6. The next tile, with the ATP domain (ADR-0018, from 1ceb46c), is in the darkroom; send the tonydefazio.com session the release once ionhomie's deploy carries 1ceb46c | Tony's "deploy" here, then his approval there | the tile matching the site |
+| **Deploy** the pump-and-transporter round ([ADR-0018](adr/0018-the-pump-carries-its-atp.md), [ADR-0019](adr/0019-atp-is-a-star-and-the-census-is-a-panel.md)): the star-shaped ATP site, persistent rings, gray cotransporters, no Cl⁻ shuttling, ions above pores, the census as a panel, slider units, a bigger game stage. Built, checked, not deployed | **Tony** | the live site |
+| **Swap the tonydefazio.com tile**: live there is 1.11.2, the rocker tile matching ionhomie v0.1.6. The next tile, with the star-shaped ATP site (ADR-0019), is in the darkroom and staged there; send the tonydefazio.com session the release once ionhomie's deploy carries it | Tony's "deploy" here, then his approval there | the tile matching the site |
 | **Dials in the running-cell chapters?** Tony: "graphs are hard for some to get used to". The dials are built for the game; rundown, pumps and chloride could carry them too | **Tony** | |
 | **Voltage-dependent resting conductances** ([ADR-0015](adr/0015-resting-conductances-from-the-pyramidal-cell.md)): source decided (the pyramidal cell); the design is proposed, not built | **Tony**, to rule when built; proposed after the concentration view | the "What is the leak?" section and Rin readouts |
 | **Tile label (optional)**: at phone width "K⁺ leak" sits against the tile's top edge; move it down a few px and resend? | **Tony** | a cosmetic tile update |

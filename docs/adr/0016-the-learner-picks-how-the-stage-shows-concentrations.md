@@ -2,6 +2,8 @@
 
 ## Status
 
+*The census's isometric cubes are superseded by [ADR-0019](0019-atp-is-a-star-and-the-census-is-a-panel.md)'s panel, 2026-10-22; the rest stands.*
+
 Accepted, 2026-10-21, by Tony, choosing among three drafted options: *"i like all of them. let's let the user
 decide what works best for them"*. The forms are Claude's, from the drafts in
 [`feedback/drafts/`](../feedback/drafts/) ([second look](../feedback/2026-10-20-second-look.md)).

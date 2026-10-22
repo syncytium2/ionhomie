@@ -4,8 +4,9 @@ import { Lab } from "../views/lab.ts";
 import { Below, ModelNote, ViewPicker, Readout, useEngine } from "./parts.tsx";
 import { Clock } from "./Rundown.tsx";
 
-const SUP = "⁰¹²³⁴⁵⁶⁷⁸⁹";
-const fmtL = (v: number) => (v <= 0 ? "off" : v.toExponential(1).replace(/e-(\d+)$/, (_, d: string) => " × 10⁻" + d.split("").map((c) => SUP[+c]).join("")));
+// a cotransporter's capacity: its rate per unit of ln(driving ratio), in femtomoles per second (1 fmol/s ≈ 600 million
+// cycles per second, in this one small cell); "off" at the bottom of the slider
+const fmtL = (v: number) => (v <= 0 ? "off" : (v * 1e15 >= 0.1 ? (v * 1e15).toFixed(2) : (v * 1e15).toFixed(3)) + " fmol/s");
 
 function engine() {
   const nk = $<HTMLInputElement>("nkcc1"), kc = $<HTMLInputElement>("kcc2");
@@ -53,8 +54,8 @@ export default function Chloride() {
             <button id="preset-nkcc1">NKCC1, to a GnRH neuron's E_GABA</button>
           </div>
           <div className="controls">
-            <label>NKCC1 <input type="range" id="nkcc1" min="-19" max="-15" step="0.05" /><output id="nkcc1-o">off</output></label>
-            <label>KCC2 <input type="range" id="kcc2" min="-19" max="-15" step="0.05" /><output id="kcc2-o">off</output></label>
+            <label>NKCC1 capacity <input type="range" id="nkcc1" min="-19" max="-15" step="0.05" /><output id="nkcc1-o">off</output></label>
+            <label>KCC2 capacity <input type="range" id="kcc2" min="-19" max="-15" step="0.05" /><output id="kcc2-o">off</output></label>
           </div>
           <div className="controls"><Clock speeds={[300, 1800]} initial={1800} /></div>
         </div>
@@ -106,7 +107,9 @@ export default function Chloride() {
           <summary>The model, and what it does not claim</summary>
           <p>Each cotransporter's rate is proportional to the logarithm of its driving ratio, so it runs forward, stops, or reverses exactly as
             thermodynamics allows:</p>
-          <div className="eq">{"NKCC1 inward ∝ ln( [Na]out[K]out[Cl]out² / [Na]in[K]in[Cl]in² )\nKCC2 outward ∝ ln( [K]in[Cl]in / [K]out[Cl]out )"}</div>
+          <div className="eq">{"NKCC1 inward = capacity × ln( [Na]out[K]out[Cl]out² / [Na]in[K]in[Cl]in² )\nKCC2 outward = capacity × ln( [K]in[Cl]in / [K]out[Cl]out )"}</div>
+          <p>The sliders set each transporter's capacity, its rate in cycles per unit of that logarithm, shown in femtomoles per second
+            (fmol/s; 1 fmol/s is about 600 million cycles a second in this one small cell). Each cycle moves its whole set of ions.</p>
           <p>E_GABA is taken to equal E_Cl. Real GABA<sub>A</sub> channels also pass some bicarbonate, which pulls E_GABA a little positive of
             E_Cl; this model leaves bicarbonate out.</p>
           <p>The cell is generic. The presets show what transport could bring this cell to each E_Cl; they do not claim what any real neuron

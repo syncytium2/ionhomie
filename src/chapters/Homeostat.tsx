@@ -17,7 +17,10 @@ function engine() {
   // scales (docs/adr/0016). Held for this page only; the learner's saved choice is put back on leaving.
   const theirView = viewPref.view;
   viewPref.view = "cell";
-  const lab = new Lab({ pump: false, speed: 100, wander: 26, setup: (cell) => { cell.pump.on = false; cell.pmca.on = false; }, onReset: () => restart() });
+  // the main display gets the room (Tony: "lets give the main display more space"): as tall as the screen allows
+  // with the dials still in view below it
+  const stageHeight = innerWidth < 600 ? 420 : Math.round(Math.max(420, Math.min(640, innerHeight - 330)));
+  const lab = new Lab({ pump: false, speed: 100, wander: 26, stageHeight, setup: (cell) => { cell.pump.on = false; cell.pmca.on = false; }, onReset: () => restart() });
   lab.controls();
   const canvas = $<HTMLCanvasElement>("stage");
   let moved = { NaOut: 0, NaIn: 0, KIn: 0, KOut: 0 };

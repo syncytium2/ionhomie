@@ -74,10 +74,12 @@ const deg = (rad: number) => (rad * 180) / Math.PI;
 const place = (rad: number, inner2: string) => { const [x, y] = at(rad, R); return `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(deg(rad) + 90)}) scale(${K_SCALE})">${inner2}</g>`; };
 const channel = (cls: string, rad: number) => place(rad, `<rect class="gap" x="-6" y="-9" width="12" height="18"/><rect class="${cls} ch" x="-14" y="-12" width="8" height="24" rx="3"/><rect class="${cls} ch" x="6" y="-12" width="8" height="24" rx="3"/>`);
 // the pump as the stage draws it (docs/adr/0017): a body whose binding cleft opens to one face and rocks
-// its cytoplasmic domain (where ATP binds) sets the pump apart from a cotransporter (docs/adr/0018); its binding site
+const starD = (x: number, y: number, r: number, ri: number, n = 5) => { let d = ""; for (let i = 0; i < 2 * n; i++) { const a = -Math.PI / 2 + (i * Math.PI) / n, rr = i % 2 ? ri : r; d += `${i ? "L" : "M"}${f(x + Math.cos(a) * rr)} ${f(y + Math.sin(a) * rr)}`; } return d + "Z"; };
+const SITE_X = 11, SITE_Y = 9; // as src/views/draw.ts: the star-shaped ATP site at a corner of the cytoplasmic face
+// the pump's star-shaped ATP site sets it apart from a cotransporter (docs/adr/0019); its binding site
 // shows hollow rings, 3 Na⁺ while open inward, 2 K⁺ while open outward
 const ring = (cls: string, x: number) => `<circle class="ring ${cls}" cx="${x}" cy="0" r="2.8"/>`;
-const pump = place(ANG.pump, `<g class="rocker"><rect class="pump dom" x="-14" y="10" width="28" height="22" rx="9"/><rect class="pump" x="-17" y="-15" width="34" height="30" rx="8"/><path class="cleft co" d="M-11 -15L11 -15L4 0L-4 0Z"/><path class="cleft ci" d="M-11 15L11 15L4 0L-4 0Z"/><g class="rna">${ring("rn", -6.5)}${ring("rn", 0)}${ring("rn", 6.5)}</g><g class="rk">${ring("rk", -3.25)}${ring("rk", 3.25)}</g></g>`);
+const pump = place(ANG.pump, `<g class="rocker"><rect class="pump" x="-17" y="-15" width="34" height="30" rx="8"/><path class="cut" d="${starD(SITE_X, SITE_Y, 5.4, 2.4)}"/><path class="atp" d="${starD(SITE_X, SITE_Y, 4.8, 2.1)}"/><path class="cleft co" d="M-11 -15L11 -15L4 0L-4 0Z"/><path class="cleft ci" d="M-11 15L11 15L4 0L-4 0Z"/><g class="rna">${ring("rn", -6.5)}${ring("rn", 0)}${ring("rn", 6.5)}</g><g class="rk">${ring("rk", -3.25)}${ring("rk", 3.25)}</g></g>`);
 const label = (t: string, rad: number) => { const [x, y] = at(rad, R + 40); return `<text class="lab" x="${f(x)}" y="${f(y)}">${t}</text>`; };
 
 // crossings: a straight run through the pathway, from R − 22 to R + 22 (stage: 16 and 22, × its scale)
@@ -106,8 +108,8 @@ const P = (t: number) => f((100 * t) / LOOP);
 const ROCK_OUT = [PUMP_T + 0.45, PUMP_T + 0.8], ROCK_IN = [PUMP_T + 2.55, PUMP_T + 2.9];
 // the nucleotide site, upright, on the cytoplasmic domain: points in the pump's own frame (x along the membrane, y inward)
 const loc = (lx: number, ly: number) => { const a = ANG.pump, cx0 = CX + Math.cos(a) * R, cy0 = CY + Math.sin(a) * R; return [cx0 + (-Math.sin(a) * lx - Math.cos(a) * ly) * K_SCALE, cy0 + (Math.cos(a) * lx - Math.sin(a) * ly) * K_SCALE]; };
-const [atpX, atpY] = loc(0, 25), [adpX, adpY] = loc(-10, 59), [inX, inY] = loc(6, 51), [pX, pY] = loc(15, 9);
-const pillShape = (cls: string, x: number, y: number, label: string) => `<g class="${cls}"><rect x="${f(x - 13)}" y="${f(y - 6.5)}" width="26" height="13" rx="6.5"/>${label ? `<text x="${f(x)}" y="${f(y + 0.5)}">${label}</text>` : ""}</g>`;
+// stars drawn upright in the page's frame: an ATP waiting in the cytoplasm, the ADP leaving, and the phosphate P
+const [wX, wY] = loc(SITE_X + 4, 32), [sX, sY] = loc(SITE_X, SITE_Y), [adX, adY] = loc(SITE_X + 8, SITE_Y + 34), [pX, pY] = loc(-SITE_X, SITE_Y);
 [-0.09, 0, 0.09].forEach((d, i) => cross("na", ANG.pump, +1, PUMP_T + i * 0.12, d));
 [-0.06, 0.06].forEach((d, i) => cross("k", ANG.pump, -1, PUMP_T + 1.9 + i * 0.12, d));
 
@@ -124,8 +126,9 @@ process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 
     Dots at the stage's density, ${DOT_DENSITY} per mM per 1000 px². Different from the stage, for a ${W}-wide tile:
     crossing dots r ${CROSS_R} (stage ${STAGE.crossR}); every ${RIM_EVERY === 2 ? "other" : RIM_EVERY + "th"} ± of the rim (each ≈ ${(RIM_EVERY * IONS_PER_SIGN).toLocaleString("en-US")} ions).
   The loop (${LOOP} s) is one steady state of the model's healthy cell (Vm ${(s.V * 1000).toFixed(1).replace("-", "−")} mV), one pump cycle per loop:
-    the Na⁺/K⁺ pump: ATP docked on its cytoplasmic domain; open to the cytoplasm, it takes 3 Na⁺, splits the ATP (ADP leaves,
-      the phosphate P stays on), rocks out and releases them, takes 2 K⁺, drops P, rocks back, and a fresh ATP docks;
+    the Na⁺/K⁺ pump: an ATP star docked in its star-shaped site; open to the cytoplasm, it takes 3 Na⁺, splits the ATP (a
+      four-pointed ADP drifts off, the phosphate P stays on), rocks out and releases them, takes 2 K⁺, drops P, rocks back,
+      and the ATP that waited in the cytoplasm docks;
     the K⁺ leak: ${n.Kout} out and ${n.Kin} in (net 2 out, which the pump returns);
     the Na⁺ leak: ${n.Nain} in and ${n.Naout} out (net 3 in, which the pump returns);
     the Cl⁻ leak: ${n.Cl} in and ${n.Cl} out (Cl⁻ sits at its reversal potential)${clFrac > 1.05 ? `, 1 in ${f(clFrac)} shown` : ""}.
@@ -137,9 +140,8 @@ process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 
 .ch{fill-opacity:.95}.mem{fill:none;stroke:${COL.membrane};stroke-width:${STAGE.membraneWidth};stroke-opacity:.9}
 .rp{stroke:${STAGE.rimPlus};stroke-width:1.6}.rn{stroke:${STAGE.rimMinus};stroke-width:1.6}
 .pump{fill:${STAGE.pump}}.cleft{fill:${STAGE.bath}}
-.dom{fill-opacity:.75}.ring{fill:none;stroke-width:1.4}.rn{stroke:${COL.na}}.rk{stroke:${COL.k}}
-.atp rect,.adp rect,.newatp rect{fill:${COL.accent}}.atp text,.adp text,.newatp text,.ph text{font:700 9px system-ui,-apple-system,"Segoe UI",sans-serif;fill:${COL.bg};text-anchor:middle;dominant-baseline:middle}
-.site rect{fill:none;stroke:${COL.accent};stroke-width:1.2;stroke-dasharray:2.5 2}.ph circle{fill:${COL.accent}}
+.ring{fill:none;stroke-width:1.4}.rn{stroke:${COL.na}}.rk{stroke:${COL.k}}.cut{fill:${STAGE.bath}}
+.atp,.newatp,.adp{fill:${COL.accent}}.ph circle{fill:${COL.accent}}.ph text{font:800 8px system-ui,-apple-system,"Segoe UI",sans-serif;fill:${COL.bg};text-anchor:middle;dominant-baseline:middle}
 .lab{font:600 12px system-ui,-apple-system,"Segoe UI",sans-serif;fill:${COL.text};text-anchor:middle;dominant-baseline:middle;paint-order:stroke;stroke:${STAGE.bath};stroke-width:3px}
 .rocker{animation:rock ${LOOP}s linear infinite}.co{animation:co ${LOOP}s linear infinite}.ci{animation:ci ${LOOP}s linear infinite}
 .rna{animation:ci ${LOOP}s linear infinite}.rk{animation:co ${LOOP}s linear infinite}
@@ -148,13 +150,15 @@ process.stdout.write(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 
 @keyframes co{0%,${P(ROCK_OUT[0])}%{opacity:0}${P(ROCK_OUT[1])}%,${P(ROCK_IN[0])}%{opacity:1}${P(ROCK_IN[1])}%,100%{opacity:0}}
 @keyframes ci{0%,${P(ROCK_OUT[0] - 0.25)}%{opacity:1}${P(ROCK_OUT[0])}%,${P(ROCK_IN[1])}%{opacity:0}${P(ROCK_IN[1] + 0.25)}%,100%{opacity:1}}
 @keyframes atp{0%,${P(PUMP_T)}%{opacity:1}${P(PUMP_T + 0.05)}%,${P(ROCK_IN[1])}%{opacity:0}${P(ROCK_IN[1] + 0.01)}%,100%{opacity:0}}
-@keyframes adp{0%,${P(PUMP_T)}%{opacity:0;transform:translate(0,0)}${P(PUMP_T + 0.05)}%{opacity:1;transform:translate(0,0)}${P(PUMP_T + 1.3)}%{opacity:0;transform:translate(${f(adpX - atpX)}px,${f(adpY - atpY)}px)}100%{opacity:0}}
-@keyframes newatp{0%,${P(ROCK_IN[1])}%{opacity:0;transform:translate(${f(inX - atpX)}px,${f(inY - atpY)}px)}${P(ROCK_IN[1] + 0.6)}%{opacity:1;transform:translate(0,0)}100%{opacity:1;transform:translate(0,0)}}
+@keyframes adp{0%,${P(PUMP_T)}%{opacity:0;transform:translate(0,0)}${P(PUMP_T + 0.05)}%{opacity:1;transform:translate(0,0)}${P(PUMP_T + 1.4)}%{opacity:0;transform:translate(${f(adX - sX)}px,${f(adY - sY)}px)}100%{opacity:0}}
+@keyframes newatp{0%,${P(PUMP_T)}%{opacity:0;transform:translate(0,0)}${P(PUMP_T + 0.3)}%,${P(ROCK_IN[1])}%{opacity:.95;transform:translate(0,0)}${P(ROCK_IN[1] + 0.6)}%{opacity:1;transform:translate(${f(sX - wX)}px,${f(sY - wY)}px)}${P(ROCK_IN[1] + 0.61)}%,100%{opacity:0;transform:translate(${f(sX - wX)}px,${f(sY - wY)}px)}}
 @keyframes w0{50%{transform:translate(2px,-1.5px)}}@keyframes w1{50%{transform:translate(-1.5px,2px)}}@keyframes w2{50%{transform:translate(1.5px,1.5px)}}@keyframes w3{50%{transform:translate(-2px,-1px)}}@keyframes w4{50%{transform:translate(1px,-2px)}}
 .w0{animation:w0 6s ease-in-out infinite}.w1{animation:w1 7s ease-in-out infinite -1s}.w2{animation:w2 6s ease-in-out infinite -2s}.w3{animation:w3 8s ease-in-out infinite -3s}.w4{animation:w4 6s ease-in-out infinite -4s}
 ${keys.join("\n")}
 .still{opacity:0}
 @media (prefers-reduced-motion: reduce){.w,.rocker,.co,.ci,.rna,.rk,.atp,.adp,.newatp,.ph,.mv{animation:none}.mv,.co,.rk,.adp,.newatp,.ph{opacity:0}.ci,.rna,.atp,.still{opacity:1}.rocker{transform:rotate(-9deg)}}
+.atp{animation:atp2 ${LOOP}s linear infinite}@keyframes atp2{0%,${P(PUMP_T)}%{opacity:1}${P(PUMP_T + 0.05)}%,${P(ROCK_IN[1] + 0.6)}%{opacity:0}${P(ROCK_IN[1] + 0.61)}%,100%{opacity:1}}
+@media (prefers-reduced-motion: reduce){.atp{animation:none;opacity:1}}
 </style>
 <rect class="bath" width="${W}" height="${H}" rx="8"/>
 ${dots.join("")}
@@ -165,7 +169,7 @@ ${rim.join("")}
 ${channel("k", ANG.K)}${channel("na", ANG.Na)}${channel("cl", ANG.Cl)}${pump}
 ${moving.join("\n")}
 <g class="still">${dot("k", stx, sty, CROSS_R)}${dot("na", snx, sny, CROSS_R)}</g>
-${pillShape("site", atpX, atpY, "")}${pillShape("atp", atpX, atpY, "ATP")}${pillShape("newatp", atpX, atpY, "ATP")}${pillShape("adp", atpX, atpY, "ADP")}<g class="ph"><circle cx="${f(pX)}" cy="${f(pY)}" r="5"/><text x="${f(pX)}" y="${f(pY + 0.5)}">P</text></g>
+<path class="newatp" d="${starD(wX, wY, 5.2, 2.3)}"/><path class="adp" d="${starD(sX, sY, 4.4, 1.9, 4)}"/><g class="ph"><circle cx="${f(pX)}" cy="${f(pY)}" r="5"/><text x="${f(pX)}" y="${f(pY + 0.5)}">P</text></g>
 ${label("K⁺ leak", ANG.K)}${label("Na⁺ leak", ANG.Na)}${label("Cl⁻ leak", ANG.Cl)}${label("Na⁺/K⁺ pump", ANG.pump)}
 </svg>
 `);

@@ -2,6 +2,8 @@
 
 ## Status
 
+*The cytoplasmic-domain lobe is superseded by [ADR-0019](0019-atp-is-a-star-and-the-census-is-a-panel.md)'s star-shaped site, 2026-10-22; the rest stands.*
+
 Accepted, 2026-10-22. Tony: *"we need to distinguish the transporters from the pump. ATP just flashes for a moment think of
 how to show it continuously. binding sites on all three should persist with hollow rings."* and *"kcc2 is the same color as
 chloride i think"*. The forms are Claude's. Builds on [ADR-0017](0017-transport-proteins-rock-they-do-not-spin.md).
