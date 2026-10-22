@@ -21,6 +21,8 @@ export class Lab {
   traceV?: Trace; traceC?: Trace; traceVol?: Trace; traceCa?: Trace;
   cell!: I.Cell; n!: I.Amounts; bath!: I.Bath; s!: I.Snapshot;
   t = 0; running = false; vol0 = 1; pumpFull = 0; ref = 1;
+  /** the pump is stopped by a drug with ATP still at hand (ouabain), not by a lack of ATP */
+  pumpBlocked = false;
   private lastRec = -1e9;
   labelRun?: () => void;
   /**
@@ -68,7 +70,7 @@ export class Lab {
 
   reset() {
     const h = I.healthyState();
-    this.cell = h.cell; this.n = h.n; this.t = 0; this.lastRec = -1e9;
+    this.cell = h.cell; this.n = h.n; this.t = 0; this.lastRec = -1e9; this.pumpBlocked = false;
     this.hand = { Na: 0, K: 0, Cl: 0, Ca: 0 };
     this.bath = { ...I.BATH };
     this.vol0 = I.sphere(this.cell.radius).volume;
@@ -90,7 +92,8 @@ export class Lab {
     ];
     if (this.o.pump) {
       const on = this.cell.pump.on && this.cell.pump.imax > 0;
-      list.push({ kind: "pump", angle: Math.PI * 0.62, label: on ? "Na⁺/K⁺ pump" : "pump: no ATP", key: "pump", on });
+      const blocked = this.pumpBlocked;
+      list.push({ kind: "pump", angle: Math.PI * 0.62, label: on ? "Na⁺/K⁺ pump" : blocked ? "pump: blocked (ouabain)" : "pump: no ATP", key: "pump", on, why: blocked ? "blocked" : "noatp" });
     }
     if (this.o.ca) list.push({ kind: "pmca", angle: Math.PI, label: "PMCA", key: "pmca", on: this.cell.pmca.on });
     if (this.o.ccc) {

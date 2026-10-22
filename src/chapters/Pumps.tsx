@@ -18,7 +18,7 @@ function engine() {
     onReset: () => { ouabain = false; frac = 1; fracIn.value = "100"; setText("pump-frac-o", "100 %"); bathK.value = "5"; setText("bath-k-o", "5.0 mM"); labels(); },
   });
   lab.controls();
-  const applyPump = () => { lab.cell.pump.on = !ouabain; lab.cell.pump.imax = lab.pumpFull * frac; lab.pathways(); };
+  const applyPump = () => { lab.cell.pump.on = !ouabain; lab.cell.pump.imax = lab.pumpFull * frac; lab.pumpBlocked = ouabain || frac === 0; lab.pathways(); };
   ouab.onclick = () => { ouabain = !ouabain; applyPump(); labels(); if (!lab.running) { lab.running = true; lab.labelRun?.(); } };
   fracIn.oninput = () => { frac = +fracIn.value / 100; setText("pump-frac-o", fracIn.value + " %"); applyPump(); };
   bathK.oninput = () => {

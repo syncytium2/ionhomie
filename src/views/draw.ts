@@ -496,6 +496,8 @@ const NA = 6.02214076e23;
 export interface Pathway {
   kind: "channel" | "pump" | "pmca" | "nkcc1" | "kcc2";
   angle: number; ions?: Species[]; open?: boolean; on?: boolean; label?: string; key?: string;
+  /** why a pump is stopped: no ATP at all (rundown, ischemia), or blocked with ATP still at hand (ouabain) */
+  why?: "noatp" | "blocked";
   phase?: number;
 }
 type Where = "in" | "out";
@@ -680,6 +682,18 @@ export class CellStage {
       const pw = this.pathways[p];
       if (!pw) continue;
       pr.t += dt; pr.clock += dt; pr.adpT += dt; if (pr.atpIn >= 0) pr.atpIn += dt;
+      if (pw.on === false && pr.phase !== "idle") {
+        // blocked mid-cycle (Tony: "blocking the pump, it still works one more time"): it stops where it is; any ion
+        // it held goes back to the side it came from
+        const back: Where = pr.legs[pr.leg]?.from ?? "in";
+        for (const b of pr.bound) {
+          if (!b.q.busy) continue;
+          const [x, y] = this.local(p, g, 0, back === "out" ? -22 : 22);
+          b.q.x = x; b.q.y = y; b.q.where = back; b.q.busy = false; b.q.crossed = this.clock;
+        }
+        pr.bound = []; pr.phase = "idle";
+        continue;
+      }
       const leg = pr.legs[pr.leg];
       if (pr.phase === "toSide" || pr.phase === "rock") {
         const D = pr.phase === "rock" ? 0.3 : 0.35, u = Math.min(1, pr.t / D);
@@ -693,13 +707,14 @@ export class CellStage {
         // while a slot is empty, and the ion walks over at a dot's pace); it closes when every slot is full
         if (pr.phase === "wait") { pr.bound = []; pr.phase = "bind"; pr.waited = 0; }
         pr.waited += dt;
-        const dir = leg.from === "in" ? 1 : -1, reach = (80 + 40 * pr.waited) * g.k;
+        // a fixed reach: an ion binds only once it has wandered near (Tony: "ions are flying across the screen again")
+        const dir = leg.from === "in" ? 1 : -1, reach = 90 * g.k;
         leg.ions.forEach((ion, i) => {
           if (pr.bound.some((x) => x.slot === i)) return;
           const c = this.nearby(p, ion, dir, reach)[0];
           if (!c) return;
           c.q.busy = true;
-          pr.bound.push({ q: c.q, slot: i, x0: c.q.x, y0: c.q.y, walk: Math.max(0.3, Math.min(1.4, c.d / 90)), start: pr.clock });
+          pr.bound.push({ q: c.q, slot: i, x0: c.q.x, y0: c.q.y, walk: Math.max(0.4, Math.min(2, c.d / 50)), start: pr.clock });
         });
         const full = pr.bound.length === leg.ions.length && pr.bound.every((x) => pr.clock - x.start >= x.walk);
         if (full) {
@@ -714,7 +729,7 @@ export class CellStage {
       } else if (pr.phase === "release") {
         // let them go one by one, into the other side, moving away from the membrane
         const due = Math.min(pr.bound.length, Math.floor(pr.t / 0.09) + 1);
-        const dest: Where = leg.from === "in" ? "out" : "in", push = 28 + 2 * this.o.wander, a = pw.angle;
+        const dest: Where = leg.from === "in" ? "out" : "in", push = 14 + this.o.wander, a = pw.angle;
         for (let i = 0; i < due; i++) {
           const b = pr.bound[i];
           if (!b.q.busy) continue;
@@ -804,7 +819,7 @@ export class CellStage {
         const q = m.part, [ex, ey] = this.mouth(m.p, g, m.dir > 0 ? g.R + 22 * g.k : g.R - 22 * g.k, m.da);
         // let it go moving away from the membrane, so crossed dots spread into the compartment instead of
         // piling up at the pore's mouth (Tony: "they're all stuck by the na leak channel")
-        const a = this.pathways[m.p].angle + m.da, push = 28 + 2 * this.o.wander;
+        const a = this.pathways[m.p].angle + m.da, push = 14 + this.o.wander;
         q.x = ex; q.y = ey; q.vx = Math.cos(a) * push * m.dir; q.vy = Math.sin(a) * push * m.dir; q.where = m.dir > 0 ? "out" : "in"; q.busy = false; q.crossed = this.clock;
       }
     }
@@ -1138,7 +1153,12 @@ export class CellStage {
    * four-pointed ADP, drifts away; a fresh ATP waits and docks when the pump has come back. Drawn upright.
    */
   private drawNucleotide(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, p: number, pw: Pathway, pr: Protein) {
-    if (pw.on === false) return; // a stopped pump: no ATP at hand (rundown), or none it can use (ouabain)
+    if (pw.on === false) {
+      // blocked (ouabain): the ATP is there but the pump cannot use it, so a star waits beside the site; with no ATP at
+      // all (rundown, ischemia) there is none to draw
+      if (pw.why === "blocked") { const [x, y] = this.local(p, g, SITE_X + 4, 32); ctx.save(); ctx.globalAlpha = 0.9; starPath(ctx, x, y, 5.2, 2.3); ctx.fillStyle = cssVar("--accent"); ctx.fill(); ctx.restore(); }
+      return;
+    }
     const accent = cssVar("--accent");
     const star = (lx: number, ly: number, n: number, alpha: number, r = 5.2) => {
       const [x, y] = this.local(p, g, lx, ly);
