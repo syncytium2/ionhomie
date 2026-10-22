@@ -10,7 +10,7 @@
 >
 > *"when the cell runs down it should be way more dramatic than a short line reporting the fact"*
 
-Built 2026-10-22, checked, **not deployed**:
+Built 2026-10-22, deployed in v0.1.6:
 
 | note | what changed |
 |---|---|
@@ -24,4 +24,4 @@ Built 2026-10-22, checked, **not deployed**:
 > *"i thought we had animated the pumps and transporters more realistically"*
 
 It had been advised, not built. Built 2026-10-22 as [ADR-0017](../adr/0017-transport-proteins-rock-they-do-not-spin.md): bind,
-close (ATP → ADP on the pump), rock, release; no rotors. Not deployed.
+close (ATP → ADP on the pump), rock, release; no rotors. Deployed in v0.1.6.

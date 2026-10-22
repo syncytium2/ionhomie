@@ -32,6 +32,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | The healthy cell is an exact pump–leak steady state at the lecture's Na⁺ 10, K⁺ 140 mM, Ca²⁺ 0.1 µM: Vm −80.3 mV, passive Cl⁻ 5.2 mM, pump current 11.1 pA | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | Blocking the pump moves Vm at once by 2.6 mV (to −77.8 mV): its direct electrogenic share in this cell | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | With no pump, after 30 minutes: Na⁺ 114 mM, K⁺ 36 mM, Vm −45 mV, volume 1.09× | `measured` | `src/core/physics.test.ts` | `98282a8` |
+| Deployed v0.1.6: the homeostat round (100× clock, dials, the collapse scene, unclumped crossings) and the rocking transport proteins (ADR-0017) (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
 | Deployed v0.1.5: the stage views (ADR-0016) and the homeostat's first level (ADR-0014) (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
 | Deployed v0.1.4: the return link to tonydefazio.com and smaller ion dots (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
 | Deployed v0.1.3, the ping-pong fix (Tony: "deploy the ping pong fix now") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
@@ -48,8 +49,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 
 | what | waits on | blocks |
 |---|---|---|
-| **Deploy** the homeostat round ([feedback](feedback/2026-10-22-homeostat.md)) and the rocking transport proteins ([ADR-0017](adr/0017-transport-proteins-rock-they-do-not-spin.md)); built, checked, not deployed | **Tony** | the live site |
-| **Swap the tonydefazio.com tile**: the rocker tile is staged there as site 1.11.2 (tonydefazio.com branch `ionhomie-rocker`, e3e877f) and **held until ionhomie's deploy carries 3c25f02**. On that deploy, send the tonydefazio.com session the release and commit | ionhomie's next deploy (Tony's "deploy"), then Tony's approval there | the tile matching the site |
+| **Swap the tonydefazio.com tile**: staged there as site 1.11.2 (branch `ionhomie-rocker`, e3e877f); ionhomie v0.1.6 (baeb981) now carries the rocker and the session has been told | Tony's approval on the tonydefazio.com side | the tile matching the site |
 | **Dials in the running-cell chapters?** Tony: "graphs are hard for some to get used to". The dials are built for the game; rundown, pumps and chloride could carry them too | **Tony** | |
 | **Voltage-dependent resting conductances** ([ADR-0015](adr/0015-resting-conductances-from-the-pyramidal-cell.md)): source decided (the pyramidal cell); the design is proposed, not built | **Tony**, to rule when built; proposed after the concentration view | the "What is the leak?" section and Rin readouts |
 | **Tile label (optional)**: at phone width "K⁺ leak" sits against the tile's top edge; move it down a few px and resend? | **Tony** | a cosmetic tile update |
