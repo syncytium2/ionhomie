@@ -32,3 +32,16 @@ close (ATP → ADP on the pump), rock, release; no rotors. Deployed in v0.1.6.
 > or get cutoff"*
 
 Built 2026-10-22 as [ADR-0018](../adr/0018-the-pump-carries-its-atp.md). Not deployed.
+
+> *"hold on the tonydefazio.com updates for now. on the pumps page, blocking the pump, it still works one more time. and even
+> though the cell hits 0mV the pmca is still happily functioning, maintaining a powerful calcium gradient. ions are flying across
+> the screen again for the pumps and transporters"*
+
+- **tonydefazio.com**: held; nothing sent there until Tony says.
+- **One more cycle after blocking**: fixed (4a68e7f). A stopped protein halts mid-cycle and returns what it held. The pumps page also
+  stops calling ouabain "no ATP": "pump: blocked (ouabain)", with ATP waiting beside it.
+- **Flying ions**: fixed (4a68e7f). The binding reach had been allowed to widen without limit; it is now fixed, with a slower walk
+  and gentler release.
+- **PMCA at 0 mV**: correct as modeled (ouabain leaves ATP, so PMCA keeps pumping), but the picture is incomplete: the model has no
+  Na⁺/Ca²⁺ exchanger (NCX). In a cell, the collapsing Na⁺ gradient reverses NCX and loads Ca²⁺, which is how digoxin raises cardiac
+  Ca²⁺. Proposed to Tony: add NCX (3 Na⁺ : 1 Ca²⁺, electrogenic). Open.
