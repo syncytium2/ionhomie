@@ -10,7 +10,7 @@ const minutes = (s: number) => (s / 60).toFixed(0) + " min";
 
 export interface LabOpts {
   pump: boolean; ca: boolean; ccc: boolean; speed: number; autorun: boolean;
-  ions: Species[]; stageHeight: number;
+  ions: Species[]; stageHeight: number; wander?: number;
   setup?: (cell: I.Cell, lab: Lab) => void;
   onReset?: () => void;
 }
@@ -43,7 +43,7 @@ export class Lab {
 
   constructor(opts: Partial<LabOpts>) {
     this.o = { pump: true, ca: false, ccc: false, speed: 300, autorun: false, ions: ["Na", "K", "Cl", "A"], stageHeight: 380, ...opts };
-    this.stage = new CellStage($<HTMLCanvasElement>("stage"), { height: this.o.stageHeight, ions: this.o.ions, mode: "amounts", cellVolume: I.sphere(10e-6).volume });
+    this.stage = new CellStage($<HTMLCanvasElement>("stage"), { height: this.o.stageHeight, ions: this.o.ions, mode: "amounts", cellVolume: I.sphere(10e-6).volume, ...(this.o.wander ? { wander: this.o.wander } : {}) });
     const grow = { window: 600, grow: true, xFmt: minutes };
     const vSeries: Series[] = [{ key: "v", color: "--accent", label: "Vm" }];
     if (this.o.ccc) vSeries.push({ key: "ecl", color: "--cl", label: "E_Cl", dash: [5, 4] });

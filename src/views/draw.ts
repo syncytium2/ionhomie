@@ -363,6 +363,50 @@ export class Trace {
   }
 }
 
+// ---------- dials: a value at a glance, for readers who do not read graphs ----------
+export interface DialSpec {
+  label: string; value: number; min: number; max: number;
+  fmt: (v: number) => string; color: string;
+  /** ranges that count as losing, drawn red on the arc */
+  bad?: [number, number][];
+}
+/**
+ * A row of dials (two rows on a narrow canvas): a 240° arc, its losing ranges in red, a needle, and the
+ * value in large type. Drawing only; the caller supplies every number.
+ */
+export function dials(canvas: HTMLCanvasElement, list: DialSpec[]) {
+  const narrow = canvas.clientWidth < 520;
+  const perRow = narrow ? Math.min(2, list.length) : list.length, rows = Math.ceil(list.length / perRow);
+  const cellH = narrow ? 118 : 132;
+  const { ctx, w } = fit(canvas, rows * cellH);
+  const cw = w / perRow;
+  const A0 = Math.PI * (5 / 6), A1 = Math.PI * (13 / 6); // 240°, open at the bottom
+  list.forEach((d, i) => {
+    const cx = cw * (i % perRow) + cw / 2, cy = Math.floor(i / perRow) * cellH + cellH * 0.5;
+    const r = Math.min(cw * 0.36, cellH * 0.38);
+    const a = (v: number) => A0 + (Math.max(0, Math.min(1, (v - d.min) / (d.max - d.min)))) * (A1 - A0);
+    ctx.lineCap = "butt";
+    ctx.lineWidth = 9; ctx.strokeStyle = cssVar("--line");
+    ctx.beginPath(); ctx.arc(cx, cy, r, A0, A1); ctx.stroke();
+    for (const [lo, hi] of d.bad ?? []) { ctx.strokeStyle = "rgba(255,90,70,0.75)"; ctx.beginPath(); ctx.arc(cx, cy, r, a(lo), a(hi)); ctx.stroke(); }
+    const out = (d.bad ?? []).some(([lo, hi]) => d.value >= lo && d.value <= hi);
+    // the needle
+    const an = a(d.value);
+    ctx.strokeStyle = d.color; ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(an) * (r + 4), cy + Math.sin(an) * (r + 4)); ctx.stroke();
+    ctx.fillStyle = d.color; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI); ctx.fill();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `700 ${narrow ? 15 : 17}px ui-monospace, Menlo, monospace`;
+    ctx.fillStyle = out ? "#ff7a64" : cssVar("--text");
+    ctx.fillText(d.fmt(d.value), cx, cy + r * 0.62);
+    ctx.font = "12px system-ui, sans-serif"; ctx.fillStyle = d.color;
+    ctx.fillText(d.label, cx, cy + r * 0.62 + 18);
+    ctx.font = "10px ui-monospace, Menlo, monospace"; ctx.fillStyle = cssVar("--muted");
+    ctx.textAlign = "right"; ctx.fillText(d.fmt(d.min), cx + Math.cos(A0) * r + 6, cy + Math.sin(A0) * r + 12);
+    ctx.textAlign = "left"; ctx.fillText(d.fmt(d.max), cx + Math.cos(A1) * r - 6, cy + Math.sin(A1) * r + 12);
+  });
+}
+
 // ---------- the balance (a teeter-totter) ----------
 export interface Weight { label: string; value: number; color: string }
 /**
@@ -444,7 +488,7 @@ export interface Pathway {
 type Where = "in" | "out";
 interface Particle { ion: Species; where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; busy: boolean }
 interface Crossing { p: number; ion: Species; dir: number; t: number; dur: number; walk?: number; part?: Particle; x0: number; y0: number; da: number; rim: boolean; delay: number }
-export interface StageOpts { height: number; ions: Species[]; mode: "fixed" | "amounts"; cellVolume: number }
+export interface StageOpts { height: number; ions: Species[]; mode: "fixed" | "amounts"; cellVolume: number; /** wander strength, px/√s (depiction only) */ wander: number }
 
 export class CellStage {
   o: StageOpts;
@@ -465,7 +509,7 @@ export class CellStage {
   private caVisit = { n: 0, until: 0 };
   private clock = 0;
   constructor(private c: HTMLCanvasElement, opts: Partial<StageOpts> = {}) {
-    this.o = { height: 420, ions: ["Na", "K", "Cl", "A"], mode: "fixed", cellVolume: (4 / 3) * Math.PI * 1e-15, ...opts };
+    this.o = { height: 420, ions: ["Na", "K", "Cl", "A"], mode: "fixed", cellVolume: (4 / 3) * Math.PI * 1e-15, wander: 9, ...opts };
   }
   geometry() {
     const w = Math.max(50, this.c.clientWidth), h = this.o.height;
@@ -609,7 +653,7 @@ export class CellStage {
       }
     }
     // a slow, smooth wander (depiction only)
-    const tau = 1.2, sig = 9;
+    const tau = 1.2, sig = this.o.wander;
     for (const q of this.parts) {
       if (q.busy) continue;
       const big = q.ion === "A" ? 0.35 : 1;
@@ -633,7 +677,10 @@ export class CellStage {
       m.t += dt / m.dur;
       if (m.t >= 1 && m.part) {
         const q = m.part, [ex, ey] = this.mouth(m.p, g, m.dir > 0 ? g.R + 22 * g.k : g.R - 22 * g.k, m.da);
-        q.x = ex; q.y = ey; q.vx = 0; q.vy = 0; q.where = m.dir > 0 ? "out" : "in"; q.busy = false;
+        // let it go moving away from the membrane, so crossed dots spread into the compartment instead of
+        // piling up at the pore's mouth (Tony: "they're all stuck by the na leak channel")
+        const a = this.pathways[m.p].angle + m.da, push = 28 + 2 * this.o.wander;
+        q.x = ex; q.y = ey; q.vx = Math.cos(a) * push * m.dir; q.vy = Math.sin(a) * push * m.dir; q.where = m.dir > 0 ? "out" : "in"; q.busy = false;
       }
     }
     this.moving = this.moving.filter((m) => m.t < 1);

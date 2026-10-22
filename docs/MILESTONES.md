@@ -48,6 +48,8 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 
 | what | waits on | blocks |
 |---|---|---|
+| **Deploy the homeostat round** ([feedback](feedback/2026-10-22-homeostat.md)): faster clock, dials, the collapse scene, unclumped crossings; built, checked, not deployed | **Tony** | the live game |
+| **Dials in the running-cell chapters?** Tony: "graphs are hard for some to get used to". The dials are built for the game; rundown, pumps and chloride could carry them too | **Tony** | |
 | **Voltage-dependent resting conductances** ([ADR-0015](adr/0015-resting-conductances-from-the-pyramidal-cell.md)): source decided (the pyramidal cell); the design is proposed, not built | **Tony**, to rule when built; proposed after the concentration view | the "What is the leak?" section and Rin readouts |
 | **Tile label (optional)**: at phone width "K⁺ leak" sits against the tile's top edge; move it down a few px and resend? | **Tony** | a cosmetic tile update |
 | **Rule on the details of ADR-0009**: the exact hues, and moving every number to the lecture's | **Tony** | settling the drawing and the presets |

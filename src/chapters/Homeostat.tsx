@@ -1,5 +1,5 @@
 import * as I from "../core/physics.ts";
-import { $, fmtBig, fmtConc, fmtMv, fmtTime, loop, setText, viewPref } from "../views/draw.ts";
+import { $, cssVar, color, dials, fmtBig, fmtConc, fmtMv, fmtTime, loop, setText, viewPref } from "../views/draw.ts";
 import { Lab } from "../views/lab.ts";
 import { Below, ModelNote, Readout, useEngine } from "./parts.tsx";
 
@@ -8,7 +8,7 @@ import { Below, ModelNote, Readout, useEngine } from "./parts.tsx";
 // (docs/adr/0011) and is delivered to the model as a flux through the zero-current solve
 // (Lab.give, physics.ts Extra), so moving charge moves Vm and the leaks pay it back.
 
-const HOLD = 10 * 60; // seconds of cell time to hold the cell
+const HOLD = 60 * 60; // seconds of cell time to hold the cell: about 36 real seconds at the default 100×
 const NA_MAX = 30, K_MIN = 110; // mM: past either, the cell has run down
 const NAV = 6.02214076e23;
 
@@ -17,17 +17,22 @@ function engine() {
   // scales (docs/adr/0016). Held for this page only; the learner's saved choice is put back on leaving.
   const theirView = viewPref.view;
   viewPref.view = "cell";
-  const lab = new Lab({ pump: false, speed: 5, setup: (cell) => { cell.pump.on = false; cell.pmca.on = false; }, onReset: () => restart() });
+  const lab = new Lab({ pump: false, speed: 100, wander: 26, setup: (cell) => { cell.pump.on = false; cell.pmca.on = false; }, onReset: () => restart() });
   lab.controls();
   const canvas = $<HTMLCanvasElement>("stage");
   let moved = { NaOut: 0, NaIn: 0, KIn: 0, KOut: 0 };
   let over: "won" | "lost" | null = null;
+  let endT = 0; // real seconds since the game ended: the ending plays out for a few seconds
+  let tEnd = Infinity; // cell time when the game ended; the clock dial freezes there
+  const COLLAPSE_SPEED = 2000, COLLAPSE_SECONDS = 7;
   let holding = false, downAt: readonly [number, number] = [0, 0], dragged = false;
 
   const status = (t: string, cls = "") => { const el = $("hs-status"); if (el) { el.textContent = t; el.className = "hs-status " + cls; } };
   const restart = () => {
-    moved = { NaOut: 0, NaIn: 0, KIn: 0, KOut: 0 }; over = null;
-    status(`Hold Na⁺ inside under ${NA_MAX} mM and K⁺ over ${K_MIN} mM for ${HOLD / 60} minutes of cell time. Tap a Na⁺ inside to send it out, and a K⁺ outside to bring it in.`);
+    moved = { NaOut: 0, NaIn: 0, KIn: 0, KOut: 0 }; over = null; endT = 0; tEnd = Infinity;
+    lab.o.speed = +($<HTMLSelectElement>("speed")?.value ?? 100);
+    canvas.style.transform = "";
+    status(`Tap Na⁺ inside to send it out and K⁺ outside to bring it in. Keep the needles out of the red for an hour of cell time.`);
   };
   restart();
 
@@ -60,22 +65,55 @@ function engine() {
   canvas.onpointercancel = let_go;
 
   const finish = (how: "won" | "lost") => {
-    over = how; lab.running = false; lab.labelRun?.();
+    over = how; endT = 0; tEnd = lab.t;
+    // a loss is not a line of text: the clock keeps running, fast, so the player watches the cell run down
+    if (how === "lost") { lab.o.speed = COLLAPSE_SPEED; lab.running = true; }
+    else lab.running = false;
+    lab.labelRun?.();
     if (how === "won") setText("hs-left", "0 s");
     const ipd = lab.stage.ionsPerDot();
     // the pump cycles your carrying is worth: each cycle is 3 Na⁺ out and 2 K⁺ in, and one ATP
     const atp = Math.max(Math.max(moved.NaOut - moved.NaIn, 0) / 3, Math.max(moved.KIn - moved.KOut, 0) / 2) * ipd;
     const pumpAtp = lab.ref * NAV * lab.t;
     status(how === "won"
-      ? `You held the cell for ${HOLD / 60} minutes. A pump would have split about ${fmtBig(pumpAtp)} ATP doing it; your hand did the work of about ${fmtBig(atp)}. Reset to play again.`
-      : `The cell ran down after ${fmtTime(lab.t)}. Reset to try again; a slower clock gives you more time per drag.`, how);
+      ? `You held the cell for an hour of cell time. A pump would have split about ${fmtBig(pumpAtp)} ATP doing it; your hand did the work of about ${fmtBig(atp)}. Reset to play again.`
+      : `The cell ran down after ${fmtTime(lab.t)} of cell time. With no pump the gradients collapse, Vm heads for zero and water floods in. Reset to try again; a slower clock gives you more time per tap.`, how);
+  };
+
+  const ending = (dt: number) => {
+    if (!over) return;
+    endT += dt;
+    if (over === "lost" && endT > COLLAPSE_SECONDS && lab.running) { lab.running = false; lab.labelRun?.(); }
+    // shake the stage for half a second when the cell gives out
+    canvas.style.transform = over === "lost" && endT < 0.6 ? `translate(${(Math.random() - 0.5) * 10}px, ${(Math.random() - 0.5) * 6}px)` : "";
+    const ctx = canvas.getContext("2d")!, w = canvas.clientWidth, h = lab.stage.o.height, s = lab.s;
+    const fade = Math.min(1, endT / 0.8), pulse = 0.5 + 0.5 * Math.sin(endT * 5);
+    const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.25, w / 2, h / 2, Math.max(w, h) * 0.7);
+    const tint = over === "lost" ? `rgba(220,40,30,${(0.25 + 0.25 * pulse) * fade})` : `rgba(60,200,110,${0.3 * fade})`;
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, tint);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    const big = over === "lost" ? "The cell ran down" : "You held the cell";
+    const narrow = w < 520;
+    const facts = [`Na⁺ ${s.ci.Na.toFixed(0)} mM in · K⁺ ${s.ci.K.toFixed(0)} mM in`, `Vm ${(s.V * 1000).toFixed(0).replace("-", "−")} mV · ${(s.volume / lab.vol0).toFixed(2)}× swollen`];
+    const subs = over === "lost" ? (narrow ? facts : [facts.join(" · ")]) : ["an hour of cell time, by hand"];
+    ctx.save(); ctx.globalAlpha = fade; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(13,17,23,0.9)";
+    ctx.font = `800 ${w < 520 ? 28 : 40}px system-ui, sans-serif`; ctx.lineWidth = 7;
+    ctx.strokeText(big, w / 2, h * 0.42); ctx.fillStyle = over === "lost" ? "#ff8a75" : "#8ff0b4"; ctx.fillText(big, w / 2, h * 0.42);
+    ctx.font = `600 ${w < 520 ? 13 : 16}px system-ui, sans-serif`; ctx.lineWidth = 5;
+    subs.forEach((t, i) => {
+      const y = h * 0.42 + (narrow ? 30 : 40) + i * 20;
+      ctx.strokeText(t, w / 2, y); ctx.fillStyle = "#e6edf3"; ctx.fillText(t, w / 2, y);
+    });
+    ctx.restore();
   };
 
   const stop = loop((dt) => {
     lab.advance(dt);
     lab.draw(dt);
+    ending(dt);
     const s = lab.s, e = lab.extra();
-    if (!over && lab.t > 0) {
+    if (!over && lab.t > 0 && lab.running) {
       if (s.ci.Na > NA_MAX || s.ci.K < K_MIN) finish("lost");
       else if (lab.t >= HOLD) finish("won");
     }
@@ -87,32 +125,38 @@ function engine() {
     setText("r-hand", ((((e.Na ?? 0) + (e.K ?? 0)) * I.F) * 1e12).toFixed(1) + " pA");
     setText("r-band", `Na⁺ ${fmtConc(s.ci.Na)} / ${NA_MAX} mM · K⁺ ${fmtConc(s.ci.K)} / ${K_MIN} mM`);
     setText("r-share", fmtMv((s.V - I.snapshot(lab.cell, lab.n, lab.bath).V) * 1000));
+    // the dials: what a player watches while playing, right under the cell
+    const left = Math.max(0, HOLD - Math.min(lab.t, tEnd));
+    const mmss = (v: number) => `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, "0")}`;
+    dials($<HTMLCanvasElement>("dials"), [
+      { label: "Na⁺ inside", value: s.ci.Na, min: 0, max: 40, fmt: (v) => v.toFixed(0) + " mM", color: color("Na"), bad: [[NA_MAX, 40]] },
+      { label: "K⁺ inside", value: s.ci.K, min: 80, max: 150, fmt: (v) => v.toFixed(0) + " mM", color: color("K"), bad: [[80, K_MIN]] },
+      { label: "Vm", value: s.V * 1000, min: -100, max: 0, fmt: (v) => v.toFixed(0) + " mV", color: cssVar("--accent") },
+      { label: "cell time left", value: left, min: 0, max: HOLD, fmt: mmss, color: cssVar("--text") },
+    ]);
   });
-  return () => { stop(); viewPref.view = theirView; };
+  return () => { stop(); canvas.style.transform = ""; viewPref.view = theirView; };
 }
 
 export default function Homeostat() {
   useEngine(engine);
   return (
     <main>
-      <div className="grid hero">
-        <div className="panel">
-          <canvas id="stage" className="grabbable" />
-          <div className="controls">
-            <button id="run">Start the clock</button>
-            <label>Speed <select id="speed" defaultValue="5">
-              <option value="2">2 seconds per second</option>
-              <option value="5">5 seconds per second</option>
-              <option value="10">10 seconds per second</option>
-            </select></label>
-            <button id="reset">Reset</button>
-            <span className="hs-left">time left <b id="hs-left">—</b></span>
-          </div>
-          <p id="hs-status" className="hs-status" />
-          <p className="src">Each dot you move is delivered over 20 s of cell time. Carrying charge moves Vm: carry a Na⁺ out alone and Vm jumps
-            negative, then the leaks pay the charge back.</p>
+      <div className="panel">
+        <canvas id="stage" className="grabbable" />
+        <canvas id="dials" />
+        <div className="controls">
+          <button id="run">Start the clock</button>
+          <label>Speed <select id="speed" defaultValue="100">
+            <option value="25">25 seconds per second</option>
+            <option value="50">50 seconds per second</option>
+            <option value="100">100 seconds per second</option>
+            <option value="200">200 seconds per second</option>
+          </select></label>
+          <button id="reset">Reset</button>
+          <span className="hs-left">time left <b id="hs-left">—</b></span>
         </div>
-        <div className="panel"><h3>Voltage ruler</h3><canvas id="ruler" /></div>
+        <p id="hs-status" className="hs-status" />
       </div>
       <div className="grid">
         <div className="panel">
@@ -139,15 +183,17 @@ export default function Homeostat() {
       </div>
 
       <Below>
+        <p className="src">Each dot you move is delivered over 20 s of cell time. Carrying charge moves Vm: carry a Na⁺ out alone and Vm jumps
+          negative, then the leaks pay the charge back.</p>
         <p className="lede">The homeostat: you are the pump. This is the rundown chapter's cell, leaks running and no ATP. Tap a dot and it crosses
           the membrane; or drag it across and let go. Na⁺ (white circles) leak in; send them out. K⁺ (blue circles) leak out; fetch them back in from the
-          bath. Hold the cell for ten minutes of cell time.</p>
+          bath. Keep Na⁺ inside under {NA_MAX} mM and K⁺ over {K_MIN} mM for an hour of cell time; the dials under the cell show where you stand.</p>
         <div className="predict"><b>Predict.</b> You can move Na⁺ and K⁺ in any ratio you like. The real pump moves 3 Na⁺ out for every 2 K⁺ in.
           If you move only Na⁺, what happens to Vm while you do it? And what keeps happening afterwards?</div>
         <ul className="notice">
           <li><b>Every dot you move is billions of ions</b>, the same scale as every other stage (it is printed on the canvas). At this cell's
-            leak rates a Na⁺ dot leaks in about every 40 seconds of cell time and a K⁺ dot leaks out about every 50, which is why the clock runs
-            a few times faster than real time, and says so.</li>
+            leak rates a Na⁺ dot leaks in about every 40 seconds of cell time and a K⁺ dot leaks out about every 50. At the default clock, 100 seconds of
+            cell time per real second, that is a few taps a second to keep up. Slow the clock to learn; speed it up to feel how hard the pump works.</li>
           <li><b>Carrying charge moves Vm.</b> A Na⁺ carried out is a positive charge leaving: Vm dips, then the leaks pay the charge back and it
             returns. That dip is your hand's electrogenic share, the same thing as the pump's few millivolts. A K⁺ carried in pushes the other
             way. Watch "your hand's share of Vm".</li>

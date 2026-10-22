@@ -30,7 +30,7 @@ const ROUTES = {
   rundown: [["click", "#run", 5000]],
   pumps: [["click", "#run", 2500], ["click", "#ouabain", 3000]],
   chloride: [["click", "#preset-nkcc1", 4000]],
-  homeostat: [["click", "#run", 3000]],
+  homeostat: [["click", "#run", 7000]], // untouched at 100×, the cell runs down: this captures the collapse scene
 };
 
 const browser = await chromium.launch();
