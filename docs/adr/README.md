@@ -55,3 +55,4 @@ change so the two never disagree.
 | [0017](0017-transport-proteins-rock-they-do-not-spin.md) | Transport proteins rock between faces; they do not spin | Accepted (Tony asked; the form is Claude's, as advised) |
 | [0018](0018-the-pump-carries-its-atp.md) | The pump carries its ATP; transporters are gray; binding sites always show | Accepted (Tony asked; the forms are Claude's); its lobe superseded by ADR-0019 |
 | [0019](0019-atp-is-a-star-and-the-census-is-a-panel.md) | ATP is a star in a star-shaped site; the census is a panel like the magnifier | Accepted (Tony) |
+| [0020](0020-a-crossed-dot-wanders-off-before-it-crosses-again.md) | A crossed dot wanders off before it crosses again, and scarce dots set the thinning | Proposed (Tony reported the problem; the fix is Claude's) |

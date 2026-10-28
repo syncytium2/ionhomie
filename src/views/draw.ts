@@ -501,7 +501,7 @@ export interface Pathway {
   phase?: number;
 }
 type Where = "in" | "out";
-interface Particle { ion: Species; where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; busy: boolean; crossed?: number }
+interface Particle { ion: Species; where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; busy: boolean; crossed?: number; away?: boolean }
 interface Leg { ions: Species[]; from: Where }
 interface Bound { q: Particle; slot: number; x0: number; y0: number; walk: number; start: number }
 /** A transport protein's alternating-access cycle (docs/adr/0017): bind, close, rock, release. */
@@ -517,6 +517,10 @@ interface Protein {
 interface Crossing { p: number; ion: Species; dir: number; t: number; dur: number; walk?: number; part?: Particle; x0: number; y0: number; da: number; rim: boolean; delay: number }
 export interface StageOpts { height: number; ions: Species[]; mode: "fixed" | "amounts"; cellVolume: number; /** wander strength, px/√s (depiction only) */ wander: number }
 
+/** A crossed dot may cross again once it is this far from the membrane (px, times the stage scale k)... */
+const AWAY = 50;
+/** ...or after this long (s), so a dot pinned near the membrane is not held out of the flux for good. */
+const REST_MAX = 15;
 export class CellStage {
   o: StageOpts;
   parts: Particle[] = [];
@@ -537,7 +541,7 @@ export class CellStage {
   private caVisit = { n: 0, until: 0 };
   private clock = 0;
   constructor(private c: HTMLCanvasElement, opts: Partial<StageOpts> = {}) {
-    this.o = { height: 420, ions: ["Na", "K", "Cl", "A"], mode: "fixed", cellVolume: (4 / 3) * Math.PI * 1e-15, wander: 9, ...opts };
+    this.o = { height: 420, ions: ["Na", "K", "Cl", "A"], mode: "fixed", cellVolume: (4 / 3) * Math.PI * 1e-15, wander: 26, ...opts };
   }
   geometry() {
     const w = Math.max(50, this.c.clientWidth), h = this.o.height;
@@ -547,6 +551,8 @@ export class CellStage {
     const R = Math.min(R0 * Math.cbrt(Math.max(0.2, this.volumeRel)), lens ? w * 0.22 : Math.min(w, h) * 0.47);
     return { w, h, cx: lens ? w * 0.24 : w / 2, cy: h / 2, R, R0, k: Math.max(1, Math.min(1.7, R0 / 105)) };
   }
+  /** The free dots of this ion on one side (those a crossing can draw from). */
+  dotsOf(ion: Species, where: Where) { return this.parts.filter((q) => q.ion === ion && q.where === where && !q.dying).length; }
   /** Ions each bulk dot stands for, at this canvas size. */
   ionsPerDot() {
     const g = this.geometry();
@@ -593,9 +599,10 @@ export class CellStage {
     const [mx, my] = this.mouth(p, g, dir > 0 ? g.R - 16 * g.k : g.R + 16 * g.k);
     const reach = reachPx ?? 80 * g.k;
     return this.parts
-      // a dot that has just crossed rests ~3 s first, so the same dot does not shuttle in and out of a pore
-      // (Tony: "chloride ions never leave the chloride leak channel")
-      .filter((q) => q.ion === ion && q.where === from && !q.dying && !q.busy && (q.crossed === undefined || this.clock - q.crossed > 3))
+      // a dot that has just crossed must first wander away from the membrane (or wait out REST_MAX), so the
+      // same dot does not shuttle in and out of a pore (Tony: "chloride ions never leave the chloride leak
+      // channel"; then "the ions are trapped moving in and out of the channel"; a 3 s rest was not enough)
+      .filter((q) => q.ion === ion && q.where === from && !q.dying && !q.busy && (q.crossed === undefined || q.away || this.clock - q.crossed > REST_MAX))
       .map((q) => ({ q, d: Math.hypot(q.x - mx, q.y - my) }))
       .filter((c) => c.d < reach)
       .sort((x, y) => x.d - y.d);
@@ -689,7 +696,7 @@ export class CellStage {
         for (const b of pr.bound) {
           if (!b.q.busy) continue;
           const [x, y] = this.local(p, g, 0, back === "out" ? -22 : 22);
-          b.q.x = x; b.q.y = y; b.q.where = back; b.q.busy = false; b.q.crossed = this.clock;
+          b.q.x = x; b.q.y = y; b.q.where = back; b.q.busy = false; b.q.crossed = this.clock; b.q.away = false;
         }
         pr.bound = []; pr.phase = "idle";
         continue;
@@ -734,7 +741,7 @@ export class CellStage {
           const b = pr.bound[i];
           if (!b.q.busy) continue;
           const [x, y] = this.local(p, g, (b.slot - (leg.ions.length - 1) / 2) * 6.5, dest === "out" ? -20 : 20);
-          b.q.x = x; b.q.y = y; b.q.where = dest; b.q.busy = false; b.q.crossed = this.clock;
+          b.q.x = x; b.q.y = y; b.q.where = dest; b.q.busy = false; b.q.crossed = this.clock; b.q.away = false;
           const s = dest === "out" ? 1 : -1;
           b.q.vx = Math.cos(a) * push * s; b.q.vy = Math.sin(a) * push * s;
         }
@@ -801,6 +808,7 @@ export class CellStage {
       q.vy += (-q.vy / tau) * dt + sig * big * Math.sqrt(dt) * gauss();
       q.x += q.vx * dt; q.y += q.vy * dt;
       const d = Math.hypot(q.x - g.cx, q.y - g.cy) || 1;
+      if (q.away === false && Math.abs(d - g.R) > AWAY * g.k) q.away = true;
       if (q.where === "in" && d > g.R - 10) { const k = (g.R - 10) / d; q.x = g.cx + (q.x - g.cx) * k; q.y = g.cy + (q.y - g.cy) * k; q.vx *= -0.5; q.vy *= -0.5; }
       if (q.where === "out") {
         if (d < g.R + 12) { const k = (g.R + 12) / d; q.x = g.cx + (q.x - g.cx) * k; q.y = g.cy + (q.y - g.cy) * k; q.vx *= -0.5; q.vy *= -0.5; }
@@ -820,7 +828,7 @@ export class CellStage {
         // let it go moving away from the membrane, so crossed dots spread into the compartment instead of
         // piling up at the pore's mouth (Tony: "they're all stuck by the na leak channel")
         const a = this.pathways[m.p].angle + m.da, push = 14 + this.o.wander;
-        q.x = ex; q.y = ey; q.vx = Math.cos(a) * push * m.dir; q.vy = Math.sin(a) * push * m.dir; q.where = m.dir > 0 ? "out" : "in"; q.busy = false; q.crossed = this.clock;
+        q.x = ex; q.y = ey; q.vx = Math.cos(a) * push * m.dir; q.vy = Math.sin(a) * push * m.dir; q.where = m.dir > 0 ? "out" : "in"; q.busy = false; q.crossed = this.clock; q.away = false;
       }
     }
     this.moving = this.moving.filter((m) => m.t < 1);

@@ -148,7 +148,15 @@ export class Lab {
     // a protein shows a cycle in about 3 s (bind, close, rock, release; the pump does two halves), so cycles
     // beyond ~0.3 per second per protein are thinned with everything else, both ways alike
     const cycles = Math.max(this.o.pump ? s.pump : 0, this.o.ccc ? Math.abs(s.nkcc1) : 0, this.o.ccc ? Math.abs(s.kcc2) : 0) * perReal;
-    const k = Math.max(1, fastest / 6, cycles / 0.3);
+    // and so that the side with few dots (Na⁺ and Cl⁻ inside, K⁺ outside) is not drawn on faster than its dots can
+    // wander away and come back: each dot crosses at most about once per TURN seconds, or the same few dots shuttle
+    // in and out of the pore (Tony: "the ions are trapped moving in and out of the channel")
+    const TURN = 6, pool = (ion: "Na" | "K" | "Cl", where: "in" | "out") => Math.max(1, this.stage.dotsOf(ion, where)) / TURN;
+    let scarce = 0;
+    for (const { ion, u } of one) scarce = Math.max(scarce, (u.efflux * s.area * perReal) / pool(ion, "in"), (u.influx * s.area * perReal) / pool(ion, "out"));
+    if (this.o.pump) scarce = Math.max(scarce, (3 * s.pump * perReal) / pool("Na", "in"), (2 * s.pump * perReal) / pool("K", "out"));
+    if (this.o.ccc) scarce = Math.max(scarce, (2 * Math.abs(s.nkcc1) * perReal) / pool("Cl", s.nkcc1 >= 0 ? "out" : "in"), (Math.abs(s.kcc2) * perReal) / pool("Cl", s.kcc2 >= 0 ? "in" : "out"));
+    const k = Math.max(1, fastest / 6, cycles / 0.3, scarce);
     this.stage.thinning = k;
     perReal /= k;
     for (const { ion, u } of one) this.stage.flowBulk(at(ion), ion, u.efflux * s.area * perReal, u.influx * s.area * perReal, dt);

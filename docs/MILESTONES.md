@@ -32,6 +32,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | The healthy cell is an exact pump–leak steady state at the lecture's Na⁺ 10, K⁺ 140 mM, Ca²⁺ 0.1 µM: Vm −80.3 mV, passive Cl⁻ 5.2 mM, pump current 11.1 pA | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | Blocking the pump moves Vm at once by 2.6 mV (to −77.8 mV): its direct electrogenic share in this cell | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | With no pump, after 30 minutes: Na⁺ 114 mM, K⁺ 36 mM, Vm −45 mV, volume 1.09× | `measured` | `src/core/physics.test.ts` | `98282a8` |
+| Crossed dots wander off before crossing again, scarce dots set the thinning, every stage wanders at 26 px/√s: ions no longer shuttle at the pores (Tony: "trapped moving in and out of the channel"); not deployed | `built` | [ADR-0020](adr/0020-a-crossed-dot-wanders-off-before-it-crosses-again.md) | see git log |
 | Deployed v0.1.7: the pump-and-transporter round (the pump carries its ATP, ADR-0018; ATP as a star in a star-shaped site, ADR-0019) and a blocked pump halts mid-cycle; ions bind only when near (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | `7b29036` |
 | Deployed v0.1.6: the homeostat round (100× clock, dials, the collapse scene, unclumped crossings) and the rocking transport proteins (ADR-0017) (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
 | Deployed v0.1.5: the stage views (ADR-0016) and the homeostat's first level (ADR-0014) (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
