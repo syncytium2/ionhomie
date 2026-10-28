@@ -32,6 +32,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 | The healthy cell is an exact pump–leak steady state at the lecture's Na⁺ 10, K⁺ 140 mM, Ca²⁺ 0.1 µM: Vm −80.3 mV, passive Cl⁻ 5.2 mM, pump current 11.1 pA | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | Blocking the pump moves Vm at once by 2.6 mV (to −77.8 mV): its direct electrogenic share in this cell | `measured` | `src/core/physics.test.ts` | `98282a8` |
 | With no pump, after 30 minutes: Na⁺ 114 mM, K⁺ 36 mM, Vm −45 mV, volume 1.09× | `measured` | `src/core/physics.test.ts` | `98282a8` |
+| Deployed v0.1.7: the pump-and-transporter round (the pump carries its ATP, ADR-0018; ATP as a star in a star-shaped site, ADR-0019) and a blocked pump halts mid-cycle; ions bind only when near (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | `7b29036` |
 | Deployed v0.1.6: the homeostat round (100× clock, dials, the collapse scene, unclumped crossings) and the rocking transport proteins (ADR-0017) (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
 | Deployed v0.1.5: the stage views (ADR-0016) and the homeostat's first level (ADR-0014) (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
 | Deployed v0.1.4: the return link to tonydefazio.com and smaller ion dots (Tony: "deploy") | `built` | [`DEPLOYED.md`](../DEPLOYED.md) | see DEPLOYED.md |
@@ -49,8 +50,7 @@ cannot silently change its mind. The form is `bugarach`'s and `ml2dl`'s.
 
 | what | waits on | blocks |
 |---|---|---|
-| **Deploy** the pump-and-transporter round ([ADR-0018](adr/0018-the-pump-carries-its-atp.md), [ADR-0019](adr/0019-atp-is-a-star-and-the-census-is-a-panel.md)): the star-shaped ATP site, persistent rings, gray cotransporters, no Cl⁻ shuttling, ions above pores, the census as a panel, slider units, a bigger game stage. Built, checked, not deployed | **Tony** | the live site |
-| **Swap the tonydefazio.com tile**: live there is 1.11.2, the rocker tile matching ionhomie v0.1.6. The next tile, with the star-shaped ATP site (ADR-0019), is in the darkroom and staged there; send the tonydefazio.com session the release once ionhomie's deploy carries it | Tony's "deploy" here, then his approval there | the tile matching the site |
+| **Swap the tonydefazio.com tile**: live there is 1.11.2, the rocker tile matching ionhomie v0.1.6. ionhomie v0.1.7 (7b29036) now carries the star-shaped ATP site (ADR-0019), so the staged tile matches the site; Tony's hold on tonydefazio.com updates (2026-10-22) stands, so the tonydefazio.com session has not been told | Tony lifting the hold, then his approval there | the tile matching the site |
 | **Add the Na⁺/Ca²⁺ exchanger (NCX)?** Without it, Ca²⁺ stays low after ouabain even at 0 mV; with it, the collapsing Na⁺ gradient reverses NCX and loads Ca²⁺ (the digoxin mechanism). Changes the physics and pinned numbers | **Tony** | Ca²⁺ in the pumps and rundown chapters |
 | **Dials in the running-cell chapters?** Tony: "graphs are hard for some to get used to". The dials are built for the game; rundown, pumps and chloride could carry them too | **Tony** | |
 | **Voltage-dependent resting conductances** ([ADR-0015](adr/0015-resting-conductances-from-the-pyramidal-cell.md)): source decided (the pyramidal cell); the design is proposed, not built | **Tony**, to rule when built; proposed after the concentration view | the "What is the leak?" section and Rin readouts |
