@@ -4,11 +4,11 @@ Written by `npm run deploy`. Do not edit by hand.
 
 | | |
 |---|---|
-| **Deployed at** | 2026-11-10 15:13 UTC |
-| **Version** | v0.1.8 |
-| **Commit** | `1d3957e`: Release v0.1.8 |
-| **Bundle** | `assets/index-66y_8zNr.js` |
-| **Worker version** | `58782ab2-51c9-40f7-9b56-f2261f75975e` |
+| **Deployed at** | 2026-11-10 16:02 UTC |
+| **Version** | v0.1.9 |
+| **Commit** | `5236445`: Release v0.1.9 |
+| **Bundle** | `assets/index-C5SNKXlX.js` |
+| **Worker version** | `1e90b368-2d15-485d-94b1-de337ae60fc9` |
 | **Live** | https://ionhomie.tonydefazio.workers.dev https://ionhomie.tonydefazio.com |
 
 Verified at deploy time: the full check passed, CSP in the shipped HTML, Born stamp baked from the
