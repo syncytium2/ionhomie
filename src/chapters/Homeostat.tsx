@@ -1,7 +1,7 @@
 import * as I from "../core/physics.ts";
 import { $, cssVar, color, dials, fmtBig, fmtConc, fmtMv, fmtTime, loop, setText, viewPref } from "../views/draw.ts";
 import { Lab } from "../views/lab.ts";
-import { Below, ModelNote, Readout, useEngine } from "./parts.tsx";
+import { Below, ModelNote, Readout, useEngine, IonKey } from "./parts.tsx";
 
 // The homeostat, level one: you are the pump. The pump is off and the leaks run, as in the rundown
 // chapter; the player drags Na⁺ out and K⁺ in by hand. A drag is a crossing of one real dot
@@ -146,7 +146,7 @@ export default function Homeostat() {
   return (
     <main>
       <div className="panel">
-        <canvas id="stage" className="grabbable" />
+        <canvas id="stage" className="grabbable" /><IonKey ions={["Na", "K", "Cl", "A"]} />
         <canvas id="dials" />
         <div className="controls">
           <button id="run">Start the clock</button>

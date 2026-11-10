@@ -1,6 +1,6 @@
 import * as I from "../core/physics.ts";
 import { $, CellStage, IONS_PER_SIGN, LABEL, Trace, Z, balance, cssVar, color, fmtMv, ledger, loop, minus, ruler, setText } from "../views/draw.ts";
-import { Below, ModelNote, ViewPicker, Readout, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, Readout, useEngine, IonKey } from "./parts.tsx";
 
 type Mono = "K" | "Na" | "Cl";
 
@@ -74,7 +74,7 @@ export default function OneChannel() {
     <main>
       <div className="grid hero">
         <div className="panel">
-          <canvas id="stage" />
+          <canvas id="stage" /><IonKey ions={["Na", "K", "Cl", "A"]} />
           <ViewPicker />
           <div className="controls">
             <button id="open">Open the channel</button>

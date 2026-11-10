@@ -114,6 +114,29 @@ export const buffering = (cell: Cell, pHi: number, bath: Bath) => cell.acid.beta
 /** Acid the buffers take up as pHi moves from pH0 to pH1, mM (positive when pH falls). */
 export const boundAcid = (cell: Cell, bath: Bath, pH0: number, pH1: number) =>
   cell.acid.betaI * (pH0 - pH1) + (hco3In(pH0, bath) - hco3In(pH1, bath));
+/** CO₂'s solubility, mM per mmHg, and its pK at 37 °C: [HCO₃⁻] = S·Pco₂·10^(pH − 6.1) (Henderson–Hasselbalch). */
+export const CO2_SOL = 0.0307, PK_CO2 = 6.1;
+/** The bath's CO₂ tension, mmHg, from its pH and HCO₃⁻ (equal inside, by assumption). */
+export const pco2 = (bath: Bath) => bath.HCO3 / (CO2_SOL * 10 ** (bath.pHo - PK_CO2));
+
+/**
+ * Change the CO₂ by a factor (2 doubles it). Two ways:
+ * - alone (respiratory acidosis): the bath's HCO₃⁻ does not change, so pHo falls by log₁₀(factor);
+ * - with pHo held (isohydric): the bath's HCO₃⁻ changes by the same factor, replacing Cl⁻ one for one so the bath stays
+ *   electroneutral and isosmotic, and pHo stays where it was.
+ * Inside, the CO₂ that enters hydrates to equal amounts of H⁺ and HCO₃⁻; only the non-bicarbonate buffers can take up that
+ * H⁺, so pHi falls at once to where the HCO₃⁻ made equals β_i times the fall. The amounts are untouched.
+ */
+export function co2Step(cell: Cell, n: Amounts, bath: Bath, factor: number, holdPHo = false): { n: Amounts; bath: Bath } {
+  const dHCO3 = bath.HCO3 * (factor - 1);
+  const b2: Bath = holdPHo ? { ...bath, HCO3: bath.HCO3 + dHCO3, Cl: bath.Cl - dHCO3 } : { ...bath, pHo: bath.pHo - Math.log10(factor) };
+  const h0 = hco3In(n.pHi, bath);
+  const f = (p: number) => hco3In(p, b2) - h0 - cell.acid.betaI * (n.pHi - p); // HCO₃⁻ made − H⁺ the buffers took
+  let lo = n.pHi - 2, hi = n.pHi + 2;
+  for (let k = 0; k < 80; k++) { const m = (lo + hi) / 2; if (f(m) > 0) hi = m; else lo = m; }
+  return { n: { ...n, pHi: (lo + hi) / 2 }, bath: b2 };
+}
+
 /** Activation of an acid extruder by internal H⁺: 1 / (1 + 10^(n(pHi − pK))). */
 const byPHi = (k: { pK: number; n: number }, pHi: number) => 1 / (1 + 10 ** (k.n * (pHi - k.pK)));
 

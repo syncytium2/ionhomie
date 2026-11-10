@@ -1,6 +1,6 @@
 import * as I from "../core/physics.ts";
 import { $, CellStage, IONS_PER_SIGN, LABEL, Trace, Z, balance, color, cssVar, fit, fmtBig, fmtMv, loop, minus, ruler, setText } from "../views/draw.ts";
-import { Below, ModelNote, ViewPicker, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, useEngine, IonKey } from "./parts.tsx";
 
 type Mono = "K" | "Na" | "Cl";
 interface ConcSet { ci: I.Monovalent; co: I.Monovalent; T: number; rest: [number, number]; A: number }
@@ -138,7 +138,7 @@ export default function Ghk() {
     <main>
       <div className="grid hero">
         <div className="panel">
-          <canvas id="stage" />
+          <canvas id="stage" /><IonKey ions={["Na", "K", "Cl", "A"]} />
           <ViewPicker />
           <div className="controls">
             <label><span>p<sub>Na</sub> / p<sub>K</sub></span> <input type="range" id="pna" min="-3" max="1.5" step="0.01" /><output id="pna-o" /></label>

@@ -1,6 +1,6 @@
 import { loop } from "../views/draw.ts";
 import { Lab } from "../views/lab.ts";
-import { Below, ModelNote, ViewPicker, Readout, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, Readout, useEngine, IonKey } from "./parts.tsx";
 
 function engine() {
   const lab = new Lab({ pump: true, speed: 300, setup: (cell) => { cell.pump.on = false; cell.pmca.on = false; } });
@@ -25,7 +25,7 @@ export default function Rundown() {
     <main>
       <div className="grid hero">
         <div className="panel">
-          <canvas id="stage" />
+          <canvas id="stage" /><IonKey ions={["Na", "K", "Cl", "A"]} />
           <ViewPicker />
           <div className="controls"><Clock /></div>
         </div>

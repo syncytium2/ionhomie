@@ -1,6 +1,6 @@
 import * as I from "../core/physics.ts";
 import { $, CellStage, fmtMv, gauges, ledger, loop, minus, ruler, setText } from "../views/draw.ts";
-import { Below, ModelNote, ViewPicker, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, useEngine, IonKey } from "./parts.tsx";
 
 function engine() {
   const h = I.healthyState();
@@ -41,7 +41,7 @@ export default function Compartments() {
     <main>
       <div className="grid hero">
         <div className="panel">
-          <canvas id="stage" />
+          <canvas id="stage" /><IonKey ions={["Na", "K", "Cl", "A"]} />
           <ViewPicker />
           <div className="controls">
             <label>Charge the membrane to <input type="range" id="charge" min="-100" max="100" step="1" defaultValue="0" /><output id="charge-o">0 mV</output></label>

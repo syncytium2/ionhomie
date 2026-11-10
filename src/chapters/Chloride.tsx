@@ -1,7 +1,7 @@
 import * as I from "../core/physics.ts";
 import { $, fmtMv, loop, setText } from "../views/draw.ts";
 import { Lab } from "../views/lab.ts";
-import { Below, ModelNote, ViewPicker, Readout, useEngine } from "./parts.tsx";
+import { Below, ModelNote, ViewPicker, Readout, useEngine, IonKey } from "./parts.tsx";
 import { Clock } from "./Rundown.tsx";
 
 // a cotransporter's capacity: its rate per unit of ln(driving ratio), in femtomoles per second (1 fmol/s ≈ 600 million
@@ -72,7 +72,7 @@ export default function Chloride() {
     <main>
       <div className="grid hero">
         <div className="panel">
-          <canvas id="stage" />
+          <canvas id="stage" /><IonKey ions={["Na", "K", "Cl", "A"]} />
           <ViewPicker />
           <div className="controls">
             <button id="preset-none">Passive: neither</button>

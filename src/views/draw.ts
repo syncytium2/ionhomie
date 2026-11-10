@@ -121,15 +121,16 @@ export function glyph(ctx: CanvasRenderingContext2D, ion: Species, x: number, y:
 /** A key of glyphs, drawn into a canvas. */
 export function drawKey(canvas: HTMLCanvasElement, ions: Species[], height = 34) {
   const { ctx, w } = fit(canvas, height);
-  let x = 12;
-  ctx.font = "14px system-ui, sans-serif";
+  let x = 12, y = 15;
+  ctx.font = "13px system-ui, sans-serif";
   ctx.textBaseline = "middle";
   for (const ion of ions) {
-    glyph(ctx, ion, x + 7, height / 2, 7);
+    const step = 26 + ctx.measureText(LABEL[ion]).width + 12;
+    if (x + step > w && x > 12) { x = 12; y += 22; } // a second row on a narrow screen
+    glyph(ctx, ion, x + 7, y, 6.5);
     ctx.fillStyle = cssVar("--text");
-    ctx.fillText(LABEL[ion], x + 20, height / 2);
-    x += 30 + ctx.measureText(LABEL[ion]).width + 18;
-    if (x > w - 40) break;
+    ctx.fillText(LABEL[ion], x + 19, y);
+    x += step;
   }
 }
 

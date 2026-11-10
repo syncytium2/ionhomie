@@ -1,9 +1,9 @@
 import * as I from "../core/physics.ts";
 import * as P from "../core/protons.ts";
-import { $, Trace, drawKey, fmtMv, gauges, loop, ruler, setText, viewPref } from "../views/draw.ts";
+import { $, Trace, fmtMv, gauges, loop, ruler, setText, viewPref } from "../views/draw.ts";
 import { ACID_ANGLE, Lab } from "../views/lab.ts";
 import { bufferLedger, overlay, phGauge } from "../views/protons-views.ts";
-import { Below, ModelNote, Readout, ViewPicker, useEngine } from "./parts.tsx";
+import { Below, ModelNote, Readout, ViewPicker, useEngine, IonKey } from "./parts.tsx";
 import { Clock } from "./Rundown.tsx";
 
 // The protons page (docs/adr/0022): the shared cell, whose pH NHE1 and NBC hold far from equilibrium. Two ways to see it:
@@ -13,6 +13,8 @@ const ANGLE = ACID_ANGLE;
 
 function engine() {
   let mode: Mode = "siesjo", vmMv = -60, pH0 = 7.0, restLeak = 1;
+  type Co2 = "normal" | "alone" | "held";
+  let co2: Co2 = "normal";
   const lab = new Lab({
     pump: true, acid: true, speed: 1800, autorun: true, ions: ["Na", "K", "Cl", "A", "HCO3"], stageHeight: 420,
     setup: (cell) => { if (mode === "siesjo") P.toSiesjo(cell, vmMv / 1000); },
@@ -35,18 +37,28 @@ function engine() {
     mark("nhe", !a.nhe.on, "Stop NHE", "Restart NHE");
     mark("nbc", !a.nbc.on, "Stop NBC", "Restart NBC");
     mark("both", !a.nhe.on && !a.nbc.on, "Stop both", "Restart both");
+    mark("co2", co2 === "alone", "Double CO₂", "CO₂ doubled: return it");
+    mark("co2-held", co2 === "held", "Double CO₂, pHo held", "CO₂ doubled, pHo held: return it");
     const vm = $<HTMLInputElement>("vm");
     vm.disabled = mode !== "siesjo";
     setText("vm-o", mode === "siesjo" ? fmtMv(vmMv, 0) + " (held)" : "free");
   };
   // after a reset: the buffer ledger counts from here, and the trace starts over
-  function after() { restLeak = I.snapshot(lab.cell, lab.n, lab.bath).acid.leak; pH0 = lab.n.pHi; trace.clear(); lastRec = -1e9; record(true); buttons(); }
+  function after() { co2 = "normal"; restLeak = I.snapshot(lab.cell, lab.n, lab.bath).acid.leak; pH0 = lab.n.pHi; trace.clear(); lastRec = -1e9; record(true); buttons(); }
   // a change of transport starts a new count in the buffer ledger, and sets the clock going
   const changed = () => { pH0 = lab.n.pHi; lab.pathways(); buttons(); if (!lab.running) { lab.running = true; lab.labelRun?.(); } };
   const a = () => lab.cell.acid;
   $("nhe").onclick = () => { a().nhe.on = !a().nhe.on; changed(); };
   $("nbc").onclick = () => { a().nbc.on = !a().nbc.on; changed(); };
   $("both").onclick = () => { const on = !a().nhe.on && !a().nbc.on; a().nhe.on = on; a().nbc.on = on; changed(); };
+  // a CO₂ step changes the bath and, at once, pHi (physics.ts, co2Step); a second press returns it
+  const setCo2 = (to: Co2) => {
+    if (co2 !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 0.5, co2 === "held"); lab.n = r.n; lab.bath = r.bath; }
+    if (to !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 2, to === "held"); lab.n = r.n; lab.bath = r.bath; }
+    co2 = to; lab.resnap(); changed();
+  };
+  $("co2").onclick = () => setCo2(co2 === "alone" ? "normal" : "alone");
+  $("co2-held").onclick = () => setCo2(co2 === "held" ? "normal" : "held");
   const vm = $<HTMLInputElement>("vm");
   vm.oninput = () => { vmMv = +vm.value; if (lab.cell.clamp) lab.cell.clamp.V = vmMv / 1000; pH0 = lab.n.pHi; lab.resnap(); buttons(); };
   const pick = $<HTMLSelectElement>("cell");
@@ -67,7 +79,6 @@ function engine() {
       leak: s.acid.leak, nhe: s.acid.nhe, nbc: s.acid.nbc, ref: restLeak, clock: lab.t / Math.max(1, lab.o.speed),
       leakAngle: ANGLE.leak, nheAngle: ANGLE.nhe, nbcAngle: ANGLE.nbc, co2Angle: ANGLE.co2,
     });
-    drawKey($<HTMLCanvasElement>("key"), ["Na", "K", "Cl", "A", "H", "HCO3", "CO2"]);
     ruler($<HTMLCanvasElement>("ruler-ph"), { V: Vmv, E: { K: s.E.K * 1000, H: EH, HCO3: EH }, g: { K: 1, H: 0.3, HCO3: 0 }, min: -110, max: 40, height: 400 });
     const pass = P.passivePHi(Vmv, pHo);
     phGauge($<HTMLCanvasElement>("phgauge"), { pHi: c.pHi, pHo, passive: pass, measured: P.SIESJO.pHi });
@@ -85,6 +96,7 @@ function engine() {
     setText("r-free", `${Math.round(c.H * P.PER_UM3_PER_MM)} per µm³`);
     setText("r-leak", perMin(s.acid.leak));
     setText("r-out", perMin(s.acid.nhe + s.acid.nbc));
+    setText("r-bath", `pH ${pHo.toFixed(2)}, CO₂ ${I.pco2(lab.bath).toFixed(0)} mmHg, HCO₃⁻ ${lab.bath.HCO3.toFixed(0)} mM`);
   });
 }
 
@@ -95,12 +107,16 @@ export default function Protons() {
       <div className="grid hero">
         <div className="panel">
           <canvas id="stage" />
-          <canvas id="key" aria-label="Key: Na⁺, K⁺, Cl⁻, A⁻, H⁺, HCO₃⁻, CO₂" />
+          <IonKey ions={["Na", "K", "Cl", "A", "H", "HCO3", "CO2"]} />
           <ViewPicker ions={["H", "HCO3", "Na", "K", "Cl"]} />
           <div className="controls">
             <button id="nhe">Stop NHE</button>
             <button id="nbc">Stop NBC</button>
             <button id="both">Stop both</button>
+          </div>
+          <div className="controls">
+            <button id="co2">Double CO₂</button>
+            <button id="co2-held">Double CO₂, pHo held</button>
           </div>
           <div className="controls">
             <label>Cell <select id="cell" defaultValue="siesjo">
@@ -130,6 +146,7 @@ export default function Protons() {
               <Readout id="r-free" k="free H⁺ inside" cls="ion-h" />
               <Readout id="r-leak" k="H⁺ leaking in" />
               <Readout id="r-out" k="acid carried out (NHE + NBC)" />
+              <Readout id="r-bath" k="the bath" />
               <Readout id="r-na" k="Na⁺ inside" cls="ion-na" />
               <Readout id="r-time" k="time" />
             </div>
@@ -160,6 +177,11 @@ export default function Protons() {
           <li><b>Bicarbonate follows pH.</b> CO₂ crosses the lipid freely and carbonic anhydrase keeps CO₂, H⁺ and HCO₃⁻ in equilibrium, so
             with CO₂ equal on both sides [HCO₃⁻]i falls tenfold with each unit of pHi, and E_HCO₃ = E_H. That is why bicarbonate through
             GABA<sub>A</sub> channels pulls E_GABA positive of E_Cl (the chloride chapter's caveat).</li>
+          <li><b>Double the CO₂ two ways.</b> CO₂ crosses at once and hydrates to H⁺ and HCO₃⁻ in equal amounts; only the non-bicarbonate
+            buffers take up the H⁺, so pHi falls at once, here from 7.0 to 6.77. With pHo held at 7.3 (the bath's HCO₃⁻ doubled too, replacing
+            Cl⁻), NHE and NBC then bring pHi back to 7.0 over a few hours as HCO₃⁻ builds inside to 25 mM: the classic recovery. With CO₂
+            alone, pHo falls to 7.0 as well; the more acid bath drives more H⁺ in through the leak, and pHi keeps sliding to 6.67 instead of
+            recovering. The outside pH sets the load the transporters must meet.</li>
           <li><b>Stopping the pump does not, by itself, acidify this cell.</b> NHE and NBC slow as the Na⁺ gradient fails, but the cell also
             depolarizes, which cuts the H⁺ leak about as much. The acidosis of ischemia comes from lactic acid made faster than it can be
             removed, which this model does not include.</li>
@@ -171,7 +193,8 @@ export default function Protons() {
           <div className="eq">{"dpHi/dt = −(H⁺ leak − NHE − NBC) / (volume · β)\nβ = β_i + 2.3·[HCO₃⁻]i        (β_i = 10 mM per pH unit; the CO₂/HCO₃⁻ system is open, CO₂ held equal)\nH⁺ leak = GHK flux of H⁺ at Vm   (zero exactly at E_H; its current is in the Vm solve)\nNHE = k · act(pHi) · ln( [Na]out[H]in / [Na]in[H]out )\nNBC = k · act(pHi) · ln( [Na]out[HCO₃]out / [Na]in[HCO₃]in )\nact(pHi) = 1 / (1 + 10^(2·(pHi − 6.9)))"}</div>
           <p>NHE and NBC run on the Na⁺ gradient and stop or reverse as thermodynamics allows; the pump returns the Na⁺ they bring in. NBC is
             taken as the electroneutral NBCn1 (1 Na⁺ : 1 HCO₃⁻); the astrocyte's electrogenic NBCe1 is left out, as are MCT and lactic acid, the
-            Cl⁻/HCO₃⁻ exchanger and the V-ATPase. The H⁺ leak's size, the 60 : 40 split between NHE and NBC, their activation and β_i are
+            Cl⁻/HCO₃⁻ exchanger and the V-ATPase. A CO₂ step keeps CO₂ equal on both sides throughout (the bath's Pco₂ follows from
+            its pH and HCO₃⁻ by Henderson–Hasselbalch, pK 6.1). The H⁺ leak's size, the 60 : 40 split between NHE and NBC, their activation and β_i are
             illustrative (several are sour's values); k is solved so that pHi rests at exactly 7.0. In Siesjö's figure a clamp holds Vm
             (and K⁺ inside), and NHE and NBC are re-solved to hold 7.0 at −60 mV.</p>
           <p>How to read the stage: free H⁺ is nanomolar, far too dilute for the stage's scale, so on the cell view it appears only as rates.

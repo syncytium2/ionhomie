@@ -57,5 +57,6 @@ change so the two never disagree.
 | [0019](0019-atp-is-a-star-and-the-census-is-a-panel.md) | ATP is a star in a star-shaped site; the census is a panel like the magnifier | Accepted (Tony) |
 | [0020](0020-a-crossed-dot-wanders-off-before-it-crosses-again.md) | A crossed dot wanders off before it crosses again, and scarce dots set the thinning | Proposed (Tony reported the problem; the fix is Claude's) |
 | [0021](0021-the-na-ca-exchanger-runs-on-the-na-gradient.md) | The Na⁺/Ca²⁺ exchanger runs on the Na⁺ gradient, and reverses when it fails | Accepted in part (Tony chose to add it; the rate law and share are Claude's) |
-| [0022](0022-a-protons-page-after-chloride-on-siesjos-cell.md) | A protons page after chloride, on Siesjö's cell, with its own small pH model | Accepted as a whole (Tony: "build it"); its separate model superseded by ADR-0023 |
+| [0022](0022-a-protons-page-after-chloride-on-siesjos-cell.md) | A protons page after chloride, on Siesjö's cell, with its own small pH model | Accepted (Tony: "build it", then each choice ruled one at a time, ADR-0024); its separate model superseded by ADR-0023 |
 | [0023](0023-h-and-hco3-join-the-shared-cell.md) | H⁺ and HCO₃⁻ join the shared cell | Accepted (Tony: "fold in now"; the rate laws and sizes are Claude's) |
+| [0024](0024-a-co2-step-two-ways-and-a-legend-under-every-stage.md) | A CO₂ step, two ways, on the protons page; an ion legend under every stage | Accepted (Tony, one decision at a time) |

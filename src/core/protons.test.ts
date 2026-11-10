@@ -66,3 +66,34 @@ test("Buffering: falling from 7.0 to 6.32 binds about 16.6 mM, ~45,000 bound per
   close(bound, 16.63, 0.01, "mM bound");
   close(bound / free, 44600, 200, "bound per free");
 });
+
+test("Doubling CO₂ alone: pHo falls to 7.0, pHi drops at once and keeps sliding; the acid bath doubles the H⁺ leak", () => {
+  const h = I.healthyState();
+  close(I.pco2(I.BATH), 51.4, 0.1, "bath Pco₂ implied by pH 7.3 and 25 mM HCO₃⁻, mmHg");
+  const { n, bath } = I.co2Step(h.cell, h.n, I.BATH, 2);
+  close(bath.pHo, 7.3 - Math.log10(2), 1e-12, "pHo falls by log₁₀ 2 = 0.30");
+  close(I.hco3In(n.pHi, bath) - I.hco3In(7.0, I.BATH), h.cell.acid.betaI * (7.0 - n.pHi), 1e-9, "HCO₃⁻ made = H⁺ the β_i buffers took");
+  close(n.pHi, 6.772, 0.001, "pHi at once");
+  let m = n;
+  for (let t = 0; t < 3 * 3600; t += 5) m = I.step(h.cell, m, 5, bath).n;
+  close(m.pHi, 6.669, 0.002, "after 3 h: no recovery");
+  const back = I.co2Step(h.cell, m, bath, 0.5);
+  close(back.bath.pHo, 7.3, 1e-12, "returning CO₂ restores pHo");
+  assert.ok(back.n.pHi > m.pHi, "and alkalinizes at once");
+});
+
+test("Doubling CO₂ with pHo held: pHi drops at once, then NHE and NBC bring it back to 7.0 as HCO₃⁻ doubles", () => {
+  const h = I.healthyState();
+  const { n, bath } = I.co2Step(h.cell, h.n, I.BATH, 2, true);
+  close(bath.pHo, 7.3, 1e-12, "pHo held");
+  close(bath.HCO3, 50, 1e-12); close(bath.Cl, 81, 1e-12, "Cl⁻ replaced one for one");
+  close(I.osmolarity(bath), 307.5, 1e-9, "isosmotic");
+  close(n.pHi, 6.772, 0.001, "pHi at once");
+  let m = n;
+  for (let t = 0; t < 8 * 3600; t += 5) m = I.step(h.cell, m, 5, bath).n;
+  const s = I.snapshot(h.cell, m, bath);
+  close(m.pHi, 7.0, 0.005, "recovered after 8 h");
+  close(s.ci.HCO3, 25.0, 0.2, "HCO₃⁻ inside doubled");
+  const back = I.co2Step(h.cell, m, bath, 0.5, true);
+  close(back.bath.HCO3, 25, 1e-12); close(back.bath.Cl, 106, 1e-12, "the bath restored");
+});

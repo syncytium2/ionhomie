@@ -30,7 +30,7 @@ const ROUTES = {
   rundown: [["click", "#run", 5000]],
   pumps: [["click", "#run", 2500], ["click", "#ouabain", 3000]],
   chloride: [["click", "#preset-nkcc1", 4000]],
-  protons: [["click", "#both", 8000]],
+  protons: [["click", "#co2-held", 3000], ["click", "#both", 6000]],
   homeostat: [["click", "#run", 7000]], // untouched at 100×, the cell runs down: this captures the collapse scene
 };
 
@@ -52,6 +52,8 @@ for (const [route, script] of Object.entries(ROUTES)) {
       } catch (e) { problems.push(`${name} [${label}] could not ${act} ${arg}: ${e.message.split("\n")[0]}`); }
       await page.waitForTimeout(wait);
     }
+    // clicking scrolls its button into view; measure the layout from the top, as a visitor first sees it
+    await page.evaluate(() => scrollTo(0, 0));
     const r = await page.evaluate(() => {
       const main = document.querySelector("main");
       const first = main?.firstElementChild;

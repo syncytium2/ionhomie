@@ -117,3 +117,5 @@ canvas.grabbable:active { cursor: grabbing; }
 .hs-status.lost { color: var(--warn); }
 /* a heading whose case carries meaning (pH, pHi) */
 h3.keepcase { text-transform: none; }
+/* the ion legend under a stage */
+canvas.ionkey { display: block; width: 100%; margin-top: 6px; }
