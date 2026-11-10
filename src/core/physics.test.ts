@@ -173,3 +173,30 @@ test("Stacked hand carries past ±200 mV still give the true zero-current Vm, no
     close(I.netCurrent(h.cell, V, s.ci, I.BATH, area, extra), 0, 1e-15, "zero net current");
   }
 });
+
+test("NCX at rest runs forward, carrying its share of the Ca²⁺ extrusion, and E_NCX sits above Vm", () => {
+  const h = I.healthyState();
+  const s = I.snapshot(h.cell, h.n);
+  close(s.ncx / -s.leak.Ca, I.NCX_SHARE, 1e-4, "NCX's share of the Ca²⁺ leak");
+  close(s.pmca / -s.leak.Ca, 1 - I.NCX_SHARE, 1e-4, "PMCA's share");
+  close(I.ncxReversal(s.ci, I.BATH) * 1000, -56.24, 0.01, "E_NCX = 3·E_Na − 2·E_Ca, mV");
+  assert.ok(s.ncx > 0, "forward: Ca²⁺ out, 3 Na⁺ in");
+});
+
+test("After ouabain NCX reverses and loads Ca²⁺, though PMCA still runs (digoxin's mechanism)", () => {
+  const run = (share: number) => {
+    const h = I.healthyState(I.HEALTHY_TARGET, I.BATH, share);
+    h.cell.pump.on = false;
+    let n = h.n;
+    for (let t = 0; t < 1800; t += 1) n = I.step(h.cell, n, 1).n;
+    return I.snapshot(h.cell, n);
+  };
+  const s = run(I.NCX_SHARE);
+  close(s.ci.Ca * 1e3, 2.6, 0.05, "Ca²⁺ after 30 min of ouabain, µM");
+  assert.ok(s.ncx < 0, "NCX reversed: Ca²⁺ in");
+  assert.ok(s.V > I.ncxReversal(s.ci, I.BATH), "Vm has crossed above E_NCX");
+  close(s.ci.Na, 114.2, 0.1, "Na⁺ as without NCX");
+  close(s.V * 1000, -45.2, 0.1, "Vm as without NCX");
+  const without = run(0);
+  assert.ok(without.ci.Ca < 1e-4, `without NCX, Ca²⁺ falls after ouabain: ${without.ci.Ca * 1e3} µM`);
+});

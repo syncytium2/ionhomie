@@ -98,6 +98,7 @@ export interface Cell {
   P: Conc; // m/s
   pump: { on: boolean; imax: number; kNa: number; kK: number };
   pmca: { on: boolean; vmax: number; k: number; n: number };
+  ncx: { on: boolean; g: number };
   nkcc1: number;
   kcc2: number;
   zA: number;
@@ -112,6 +113,8 @@ export const defaultCell = (): Cell => ({
   pump: { on: true, imax: 0, kNa: 10, kK: 1.5 },
   // PMCA: maximal Ca²⁺ extrusion, mol/(m²·s); Hill n = 2, K = 0.2 µM. Electroneutral here (Ca²⁺/H⁺ not modeled).
   pmca: { on: true, vmax: 0, k: 0.2e-3, n: 2 },
+  // Na⁺/Ca²⁺ exchanger: conductance S/m², solved in healthyState to carry NCX_SHARE of the resting Ca²⁺ extrusion.
+  ncx: { on: true, g: 0 },
   // Cation–chloride cotransporters: mol/s per unit of ln(driving ratio).
   nkcc1: 0,
   kcc2: 0,
@@ -130,6 +133,19 @@ export function pmcaRate(cell: Cell, ci: Conc, area: number) {
   const { k, n } = cell.pmca;
   return cell.pmca.vmax * area * (ci.Ca ** n / (ci.Ca ** n + k ** n));
 }
+/**
+ * The Na⁺/Ca²⁺ exchanger (NCX): 3 Na⁺ for 1 Ca²⁺, so each cycle carries one net charge. It uses no ATP,
+ * only the Na⁺ gradient, and it reverses where Vm crosses its reversal potential, E_NCX = 3·E_Na − 2·E_Ca.
+ * A linear teaching model: current = g·area·(Vm − E_NCX), outward positive.
+ */
+export const ncxReversal = (ci: Conc, bath: Bath) => 3 * nernst(1, bath.Na, ci.Na) - 2 * nernst(2, bath.Ca, ci.Ca);
+export function ncxCurrent(cell: Cell, V: number, ci: Conc, bath: Bath, area: number) {
+  if (!cell.ncx.on || !cell.ncx.g) return 0;
+  return cell.ncx.g * area * (V - ncxReversal(ci, bath));
+}
+/** NCX cycles, mol/s: positive is forward (Ca²⁺ out, 3 Na⁺ in, an inward current), negative is reversed. */
+export const ncxRate = (cell: Cell, V: number, ci: Conc, bath: Bath, area: number) => -ncxCurrent(cell, V, ci, bath, area) / F;
+
 /** NKCC1, mol/s inward (1 Na⁺, 1 K⁺, 2 Cl⁻ per cycle). Negative means it runs outward. */
 export function nkcc1Rate(cell: Cell, ci: Conc, bath: Bath) {
   if (!cell.nkcc1) return 0;
@@ -158,11 +174,11 @@ const extraCurrent = (extra?: Extra) => {
   return i;
 };
 
-/** Net membrane current (A, outward positive) at V: the leaks, the pump's net charge, and any extra flux. */
+/** Net membrane current (A, outward positive) at V: the leaks, the pump's net charge, NCX, and any extra flux. */
 export function netCurrent(cell: Cell, V: number, ci: Conc, bath: Bath, area: number, extra?: Extra) {
   let i = 0;
   for (const ion of IONS) i += area * ghkCurrent(cell.P[ion], ION_Z[ion], V, ci[ion], bath[ion]);
-  return i + F * pumpRate(cell, ci, bath, area) + extraCurrent(extra);
+  return i + F * pumpRate(cell, ci, bath, area) + ncxCurrent(cell, V, ci, bath, area) + extraCurrent(extra);
 }
 
 /**
@@ -183,7 +199,7 @@ export function restingV(cell: Cell, ci: Conc, bath: Bath, area: number, extra?:
 
 export interface Snapshot {
   V: number; ci: Inside; volume: number; area: number;
-  leak: Conc; pump: number; pmca: number; nkcc1: number; kcc2: number;
+  leak: Conc; pump: number; pmca: number; ncx: number; nkcc1: number; kcc2: number;
   E: Conc; net: Conc;
 }
 
@@ -200,15 +216,16 @@ export function snapshot(cell: Cell, n: Amounts, bath: Bath = BATH, extra?: Extr
   }
   const pump = pumpRate(cell, ci, bath, area);
   const pmca = pmcaRate(cell, ci, area);
+  const ncx = ncxRate(cell, V, ci, bath, area);
   const nkcc1 = nkcc1Rate(cell, ci, bath);
   const kcc2 = kcc2Rate(cell, ci, bath);
   const net: Conc = {
-    Na: leak.Na + 3 * pump - nkcc1 + (extra?.Na ?? 0),
+    Na: leak.Na + 3 * pump - 3 * ncx - nkcc1 + (extra?.Na ?? 0),
     K: leak.K - 2 * pump - nkcc1 + kcc2 + (extra?.K ?? 0),
     Cl: leak.Cl - 2 * nkcc1 + kcc2 + (extra?.Cl ?? 0),
-    Ca: leak.Ca + pmca + (extra?.Ca ?? 0),
+    Ca: leak.Ca + pmca + ncx + (extra?.Ca ?? 0),
   };
-  return { V, ci, volume, area, leak, pump, pmca, nkcc1, kcc2, E, net };
+  return { V, ci, volume, area, leak, pump, pmca, ncx, nkcc1, kcc2, E, net };
 }
 
 /** Advance the cell by dt seconds (forward Euler on amounts; dt of a second or two is stable here). */
@@ -242,12 +259,20 @@ export function amountsFor(radius: number, ci: Conc, bath: Bath = BATH) {
 //
 // Not tuned by hand: solved exactly. Fix the lecture's inside values, Na⁺ 10 mM, K⁺ 140 mM and
 // Ca²⁺ 0.1 µM. For Na⁺
-// and K⁺ to be steady, the pump must return 3 Na⁺ for every 2 K⁺ the leaks carry, which happens
-// at exactly one Vm: 2·leak_Na(V) + 3·leak_K(V) = 0. That Vm fixes the pump's strength, Cl⁻ sits
-// passively at E_Cl = Vm, the PMCA balances the Ca²⁺ leak, and the impermeant anion is whatever
+// and K⁺ to be steady, the pump must return 3 Na⁺ for every 2 K⁺ the leaks carry, and also the
+// 3 Na⁺ that NCX brings in for each Ca²⁺ it puts out. That happens at exactly one Vm:
+// 2·leak_Na(V) + 3·leak_K(V) − 6·ncx(V) = 0. That Vm fixes the pump's strength, Cl⁻ sits
+// passively at E_Cl = Vm, PMCA and NCX share the Ca²⁺ leak, and the impermeant anion is whatever
 // makes the inside electroneutral and isosmotic. physics.test.ts pins the result.
 
 export const HEALTHY_TARGET = { Na: 10, K: 140, Ca: 1e-4 };
+
+/**
+ * The share of the resting Ca²⁺ extrusion NCX carries; PMCA carries the rest. Illustrative, not
+ * sourced: at a resting Ca²⁺ of 0.1 µM the high-affinity PMCA does most of the work, and the
+ * low-affinity, high-capacity NCX matters most when Ca²⁺ is high or the Na⁺ gradient fails.
+ */
+export const NCX_SHARE = 0.5;
 
 // Cotransporter strengths that bring the healthy cell's E_Cl to two measured E_GABA values, solved
 // by bisection and pinned in physics.test.ts. The cell is generic: these say what transport could
@@ -260,11 +285,12 @@ export const CCC_PRESETS = {
   gnrh: { nkcc1: 2.8566e-16, kcc2: 0 }, // E_Cl −36.5 mV, E_GABA measured in adult mouse GnRH neurons (DeFazio et al. 2002)
 };
 
-export function healthyState(target = HEALTHY_TARGET, bath: Bath = BATH) {
+export function healthyState(target = HEALTHY_TARGET, bath: Bath = BATH, ncxShare = NCX_SHARE) {
   const cell = defaultCell();
   const { area } = sphere(cell.radius);
   const leak = (ion: Ion, V: number, c: number) => area * ghkFlux(cell.P[ion], ION_Z[ion], V, c, bath[ion]);
-  const f = (V: number) => 2 * leak("Na", V, target.Na) + 3 * leak("K", V, target.K);
+  const ncx = (V: number) => -ncxShare * leak("Ca", V, target.Ca); // forward cycles, mol/s
+  const f = (V: number) => 2 * leak("Na", V, target.Na) + 3 * leak("K", V, target.K) - 6 * ncx(V);
   let lo = -0.2, hi = 0.05;
   for (let k = 0; k < 100; k++) { const m = (lo + hi) / 2; if (f(m) > 0) hi = m; else lo = m; }
   const V = (lo + hi) / 2;
@@ -273,7 +299,10 @@ export function healthyState(target = HEALTHY_TARGET, bath: Bath = BATH) {
   const fK = bath.K ** 2 / (bath.K ** 2 + cell.pump.kK ** 2);
   cell.pump.imax = (rate * F) / (area * fNa * fK);
   const { k, n: h } = cell.pmca;
-  cell.pmca.vmax = -leak("Ca", V, target.Ca) / (area * (target.Ca ** h / (target.Ca ** h + k ** h)));
+  cell.pmca.vmax = -(1 - ncxShare) * leak("Ca", V, target.Ca) / (area * (target.Ca ** h / (target.Ca ** h + k ** h)));
+  const eNcx = ncxReversal({ Na: target.Na, K: target.K, Cl: 0, Ca: target.Ca }, bath);
+  cell.ncx.g = (ncx(V) * F) / (area * (eNcx - V)); // forward cycles = −g·area·(V − E_NCX)/F
+  if (!ncxShare) cell.ncx.on = false;
   const Cl = bath.Cl * Math.exp(V / rtf()); // E_Cl = Vm for z = −1
   const a = amountsFor(cell.radius, { Na: target.Na, K: target.K, Cl, Ca: target.Ca }, bath);
   cell.zA = a.zA;
