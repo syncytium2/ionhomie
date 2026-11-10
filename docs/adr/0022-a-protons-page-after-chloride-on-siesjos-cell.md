@@ -28,8 +28,10 @@ gradient the pump built. The 578 lectures teach it with the Siesjö figure (the 
 the acid half of the acid/sour lecture, which Tony calls figure 0. At Vm −60 mV, with CO₂ equal on both sides, passive
 pHi would be 6.3 and [HCO₃⁻]i 2.5 mM; the measured values are 7.0 and 12.5 mM. The figure is Fig. 8 of Siesjö BK,
 "Acid-base homeostasis in the brain: physiology, chemistry, and neurochemical pathology", *Prog Brain Res* 1985;63:121–154
-(PMID 3915123, doi:10.1016/S0079-6123(08)61980-9). That identification comes from the publisher's caption pasted in the
-slide's notes and agrees with PubMed. The article's page has not been opened yet.
+(PMID 3915123, doi:10.1016/S0079-6123(08)61980-9). Checked against the paper on 2026-11-10: Fig. 8 is on p. 132, with the slide's numbers and caption. The text adds
+that −60 mV "was chosen to facilitate calculations" (true values −60 to −90 mV), gives the passive [HCO₃⁻]i as 2 mM
+where the figure gives 2.5 (the Nernst equation gives 2.65), and names the Na⁺/H⁺ antiporter as probably the major
+route of H⁺ extrusion (its Fig. 9).
 
 sour (sour.tonydefazio.com) already runs NHE, NBC, CO₂ with carbonic anhydrase, and buffering, but draws none of it. It
 handed the fundamentals to ionhomie and will link its Siesjö preset to this page.

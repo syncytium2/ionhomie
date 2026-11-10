@@ -196,7 +196,7 @@ export default function Protons() {
             nanomolar, far too dilute for that scale, so on the cell view it appears only as rates: the arrows' widths are each flux
             relative to the resting acid load, and NHE rocks at its rate. The census view counts free H⁺ one dot per ion.</p>
           <p>The cell is Siesjö's: after Siesjö BK (1985), Acid-base homeostasis in the brain: physiology, chemistry, and neurochemical
-            pathology, Prog Brain Res 63:121–154, Fig. 8, as shown in the Physiol 578 acid/sour lecture.</p>
+            pathology, Prog Brain Res 63:121–154, Fig. 8 (p. 132), doi:10.1016/S0079-6123(08)61980-9, as shown in the Physiol 578 acid/sour lecture.</p>
         </details>
       </Below>
     </main>
