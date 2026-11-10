@@ -1,0 +1,174 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Protons, step by step: mockup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--line:#2b3442;--text:#e6edf3;--muted:#9aa5b1;--h:#cc79a7;--hco3:#e69f00;--co2:#9aa5b1;--a:#8a7f6a;--acc:#f0e442;--ok:#7fb069}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1180px;margin:0 auto;padding:12px 16px 40px}
+.banner{border:1px dashed var(--line);border-radius:10px;padding:6px 12px;color:var(--muted);font-size:13px;margin-bottom:10px}
+.banner b{color:var(--text)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+canvas{display:block;width:100%;border-radius:8px;background:#101826}
+.stepbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.stepbar .name{font-weight:650}
+.stepbar .dots{color:var(--muted);font-size:13px}
+.controls{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px}
+button{font:inherit;font-size:14px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+button.on{background:#2d3a1f;border-color:var(--ok)}
+label{color:var(--muted);font-size:14px;display:flex;gap:8px;align-items:center}
+select{font:inherit;font-size:14px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.below{max-width:760px;margin-top:18px}
+.predict{border-left:3px solid var(--acc);background:var(--panel2);padding:8px 12px;border-radius:6px;margin:10px 0}
+.toggle{margin-left:auto}
+[hidden]{display:none!important}
+</style></head><body><main>
+<div class="banner"><b>Mockup for Tony: the first two steps.</b> A working sketch, not the app. Rate constants are placeholders to be sourced: the uncatalyzed hydration rate (0.13 s⁻¹ at 37 °C) and the buffer (25 mM, pK 6.9).</div>
+<div class="panel">
+  <canvas id="c" height="420"></canvas>
+  <div class="stepbar">
+    <button id="back">← Back</button>
+    <span class="name" id="stepname"></span>
+    <span class="dots" id="stepdots"></span>
+    <button id="next">Next →</button>
+    <button class="toggle" id="skip" title="Jump to the whole cell, everything on">Skip to the whole cell ⇥</button>
+  </div>
+  <div class="controls" id="ctl">
+    <button id="addco2">Add CO₂ (+1 mM)</button>
+    <button id="addacid">Add acid (+1 mM H⁺)</button>
+    <button id="addhco3">Add HCO₃⁻ (+5 mM)</button>
+    <label id="calabel" hidden>Carbonic anhydrase <select id="ca"><option value="1">none</option><option value="100">a little (×100)</option><option value="10000" selected>as in a cell (×10,000)</option></select></label>
+    <button id="buffer" hidden>Buffer: on</button>
+    <button id="reset">Reset</button>
+  </div>
+</div>
+<section class="below" id="text"></section>
+</main>
+<script>
+// ---- the box: CO₂ + H₂O ⇌ H⁺ + HCO₃⁻, sealed, at 37 °C; concentrations in mM ----
+const K = 10 ** -6.1 * 1e3;      // [H⁺][HCO₃⁻]/[CO₂], mM (pK 6.1)
+const KH = 0.13;                  // uncatalyzed hydration, s⁻¹ (placeholder, to source)
+const KD = KH / K;                // dehydration, mM⁻¹ s⁻¹, so that equilibrium is pK 6.1
+const BT = 25, KB = 10 ** -6.9 * 1e3; // the buffer of step 2: 25 mM, pK 6.9 (placeholder)
+const START = { co2: 1.2, hco3: 24 };
+let s, step = 0, buffered = false, ca = 1e4, t = 0;
+const freeH = (acid) => { if (!buffered) return acid; let a = 0, b = acid; for (let i = 0; i < 80; i++) { const m = (a + b) / 2; (m + BT * m / (m + KB)) > acid ? (b = m) : (a = m); } return (a + b) / 2; };
+const totalAcid = (h) => h + (buffered ? BT * h / (h + KB) : 0);
+function reset() { const h = K * START.co2 / START.hco3; s = { co2: START.co2, hco3: START.hco3, acid: totalAcid(h) }; t = 0; trace.length = 0; }
+// the net amount converted forward that brings it to equilibrium from here
+function toEq() { const g = (x) => freeH(s.acid + x) * (s.hco3 + x) - K * (s.co2 - x); let lo = -Math.min(s.hco3, s.acid) + 1e-12, hi = s.co2 - 1e-12; for (let i = 0; i < 90; i++) { const m = (lo + hi) / 2; g(m) > 0 ? (hi = m) : (lo = m); } return (lo + hi) / 2; }
+function rates() { const h = freeH(s.acid); return { f: ca * KH * s.co2, b: ca * KD * h * s.hco3, h }; }
+function advance(dt) {
+  // relax toward equilibrium at the rate the kinetics set (stable at any enzyme level)
+  const x = toEq(), r = rates(), lam = Math.abs(r.f - r.b) > 1e-15 ? Math.abs((r.f - r.b) / x) : ca * KH * 2;
+  const dx = x * (1 - Math.exp(-Math.min(50, lam * dt)));
+  s.co2 -= dx; s.hco3 += dx; s.acid += dx; t += dt; conv += dx;
+}
+// ---- the picture ----
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+const C = { co2: "#9aa5b1", hco3: "#e69f00", h: "#cc79a7", a: "#8a7f6a", text: "#e6edf3", muted: "#9aa5b1", acc: "#f0e442", line: "#2b3442" };
+const PER_DOT = 0.25; // mM per dot, both CO₂ and HCO₃⁻: one stated scale
+let dots = [], conv = 0, flashes = [], trace = [];
+function fit() { const w = cv.clientWidth, d = Math.min(2, devicePixelRatio || 1); cv.width = w * d; cv.height = 420 * d; ctx.setTransform(d, 0, 0, d, 0, 0); return w; }
+function syncDots(box) {
+  const want = { co2: Math.round(s.co2 / PER_DOT), hco3: Math.round(s.hco3 / PER_DOT), buf: buffered ? Math.round(BT / 1) : 0 };
+  for (const k of ["co2", "hco3", "buf"]) {
+    let have = dots.filter((d) => d.k === k);
+    while (have.length < want[k]) { const d = { k, x: box.x + 10 + Math.random() * (box.w - 20), y: box.y + 10 + Math.random() * (box.h - 20), vx: 0, vy: 0 }; dots.push(d); have.push(d); }
+    while (have.length > want[k]) { const d = have.pop(); dots.splice(dots.indexOf(d), 1); if (k === "co2" || k === "hco3") flashes.push({ x: d.x, y: d.y, k, life: 1 }); }
+  }
+}
+function glyph(k, x, y, r, a = 1) {
+  ctx.save(); ctx.globalAlpha = a;
+  if (k === "co2") { ctx.strokeStyle = C.co2; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke(); }
+  else if (k === "hco3") { ctx.fillStyle = C.hco3; ctx.beginPath(); ctx.moveTo(x, y - r * 1.3); ctx.lineTo(x + r * 1.2, y + r); ctx.lineTo(x - r * 1.2, y + r); ctx.fill(); }
+  else if (k === "h") { ctx.fillStyle = C.h; ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, 7); ctx.fill(); }
+  else if (k === "buf") { ctx.fillStyle = C.a; ctx.beginPath(); ctx.ellipse(x, y, r * 1.6, r, 0, 0, 7); ctx.fill(); }
+  ctx.restore();
+}
+function arrowBar(x0, x1, y, w, col, dir) {
+  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = w; ctx.lineCap = "round";
+  const tip = dir > 0 ? x1 : x0, tail = dir > 0 ? x0 : x1, hl = 8 + w;
+  ctx.beginPath(); ctx.moveTo(tail, y); ctx.lineTo(tip - dir * hl * 0.7, y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tip, y); ctx.lineTo(tip - dir * hl, y - hl * 0.6); ctx.lineTo(tip - dir * hl, y + hl * 0.6); ctx.fill();
+}
+function logW(r) { return 1 + 10 * Math.max(0, (Math.log10(Math.max(r, 1e-7)) + 7) / 9); } // 1e-7 … 100 mM/s
+function fmtR(r) { return r >= 0.01 ? r.toFixed(2) : r >= 1e-4 ? r.toExponential(1).replace("e-", "×10⁻").replace(/⁻(\d)/, (m, d) => "⁻" + "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]) : r.toExponential(0); }
+function draw(dt) {
+  const w = fit(), narrow = w < 640;
+  ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, w, 420);
+  // the box of solution, on the left (top on a phone)
+  const box = narrow ? { x: 10, y: 10, w: w - 20, h: 180 } : { x: 14, y: 14, w: w * 0.42, h: 392 };
+  ctx.fillStyle = "#14202f"; ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(box.x, box.y, box.w, box.h, 10); ctx.fill(); ctx.stroke();
+  syncDots(box);
+  for (const d of dots) {
+    d.vx += -d.vx * dt + 14 * Math.sqrt(dt) * (Math.random() - 0.5) * 3; d.vy += -d.vy * dt + 14 * Math.sqrt(dt) * (Math.random() - 0.5) * 3;
+    d.x = Math.min(box.x + box.w - 8, Math.max(box.x + 8, d.x + d.vx * dt)); d.y = Math.min(box.y + box.h - 8, Math.max(box.y + 8, d.y + d.vy * dt));
+    glyph(d.k, d.x, d.y, d.k === "buf" ? 4 : 4);
+  }
+  // a buffer molecule carrying an H⁺: the bound fraction, drawn as an H⁺ on that many buffer blobs
+  if (buffered) { const h = freeH(s.acid), bound = BT * h / (h + KB), nb = Math.round(bound / BT * dots.filter((d) => d.k === "buf").length); let i = 0; for (const d of dots) if (d.k === "buf" && i++ < nb) glyph("h", d.x + 5, d.y - 3, 3.2); }
+  for (const f of flashes) { f.life -= dt * 1.2; glyph(f.k, f.x, f.y, 6, Math.max(0, f.life)); }
+  flashes = flashes.filter((f) => f.life > 0);
+  const tag = (txt, x, y, col = C.muted, font = "12px system-ui", boxed = false) => { ctx.font = font; ctx.textAlign = "left"; ctx.textBaseline = "middle"; if (boxed) { const tw = ctx.measureText(txt).width; ctx.fillStyle = "rgba(13,17,23,0.85)"; ctx.fillRect(x - 4, y - 9, tw + 8, 18); } ctx.fillStyle = col; ctx.fillText(txt, x, y); };
+  tag(`each ring or triangle ≈ ${PER_DOT} mM${buffered ? (narrow ? "; blob ≈ 1 mM buffer" : "; each blob ≈ 1 mM of buffer, with an H⁺ when it carries one") : ""}`, box.x + 8, box.y + box.h - 12, C.muted, "12px system-ui", true);
+  tag(narrow ? `free H⁺ ${(freeH(s.acid) * 1e6).toFixed(0)} nM: too few to draw` : `free H⁺: ${(freeH(s.acid) * 1e6).toFixed(0)} nM, far too few to draw at this scale`, box.x + 8, box.y + 14, C.h, "12px system-ui", true);
+  // the equation, with both directions drawn and the net beneath
+  const ex = narrow ? 14 : w * 0.47, ey = narrow ? 228 : 70, ew = narrow ? w - 28 : w * 0.5;
+  ctx.font = `600 ${narrow ? 19 : 26}px system-ui`; ctx.textAlign = "center"; ctx.fillStyle = C.text;
+  ctx.fillText("CO₂ + H₂O  ⇌  H⁺ + HCO₃⁻", ex + ew / 2, ey);
+  const r = rates(), a0 = narrow ? ex + 4 : ex + ew * 0.32, a1 = narrow ? ex + ew - 4 : ex + ew * 0.92;
+  const fy = narrow ? ey + 40 : ey + 34, by = narrow ? ey + 78 : ey + 58;
+  arrowBar(a0, a1, fy, logW(r.f), C.co2, +1); tag(`forward ${fmtR(r.f)} mM/s`, narrow ? ex + 4 : ex, narrow ? fy - 16 : fy);
+  arrowBar(a0, a1, by, logW(r.b), C.hco3, -1); tag(`back ${fmtR(r.b)} mM/s`, narrow ? ex + 4 : ex, narrow ? by - 16 : by);
+  const net = r.f - r.b, eq = Math.abs(net) < 1e-3 * Math.max(r.f, 1e-9);
+  const ny = narrow ? ey + 104 : ey + 84;
+  tag(eq ? (narrow ? "net: none (equilibrium)" : "net: none. Both directions run all the time, equally: equilibrium") : `net: ${net > 0 ? "forward" : "back"}, ${fmtR(Math.abs(net))} mM/s`, narrow ? ex + 4 : ex + ew * 0.32, ny, eq ? C.muted : C.acc, "600 13px system-ui");
+  if (!narrow) tag(step === 0 ? "arrow widths: rates, log scale" : "arrow widths: rates, log scale; carbonic anhydrase multiplies both alike", ex + ew * 0.32, ey + 104);
+  // the readouts
+  const pH = -Math.log10(freeH(s.acid) / 1e3), ry = narrow ? ey + 132 : 230;
+  const rows = [["CO₂", s.co2.toFixed(2) + " mM", C.co2], ["HCO₃⁻", s.hco3.toFixed(2) + " mM", C.hco3], ["pH", pH.toFixed(2), C.h], ["converted since the last change", (conv >= 0 ? "+" : "") + (Math.abs(conv) < 0.001 ? (conv * 1e6).toFixed(0) + " nM" : conv.toFixed(3) + " mM") + (conv >= 0 ? " forward" : " back"), C.muted], ["time", t.toFixed(1) + " s", C.muted]];
+  if (!narrow) rows.forEach(([k, v, col], i) => { tag(k, ex + ew * 0.32, ry + i * 26, C.muted, "13px system-ui"); tag(v, ex + ew * 0.32 + 230, ry + i * 26, col, "600 15px ui-monospace, Menlo, monospace"); });
+  else tag(`CO₂ ${s.co2.toFixed(2)} · HCO₃⁻ ${s.hco3.toFixed(1)} mM · pH ${pH.toFixed(2)} · ${t.toFixed(1)} s`, 14, ry, C.text, "13px system-ui");
+}
+// ---- the steps ----
+const STEPS = [
+  { name: "1 of 6: the reaction", buffer: false, text: `<p><b>CO₂ and water make carbonic acid's two halves, H⁺ and HCO₃⁻, and they make CO₂ again.</b> Both directions run all the time. At equilibrium they run equally fast, so nothing changes, though plenty is happening.</p>
+<div class="predict"><b>Predict.</b> Add acid. Which way does the reaction run, and where does the H⁺ go? Then add CO₂. How much becomes HCO₃⁻?</div>
+<p><b>Which way it runs depends on the concentrations.</b> Add acid and it runs back: the H⁺ meets HCO₃⁻ and leaves as CO₂, so most of the acid disappears. That is bicarbonate acting as a buffer. Add HCO₃⁻ and it runs back too; add CO₂ and it runs forward.</p>
+<p><b>But adding CO₂ makes surprisingly little HCO₃⁻ here</b>: about 30 nM, while pH falls 0.26. The H⁺ it would make has nowhere to go, so a few nanomolar is enough to reach equilibrium, in well under a millisecond. That is the next step.</p>` },
+  { name: "2 of 6: buffers, and carbonic anhydrase", buffer: true, text: `<p><b>Buffers take up H⁺.</b> Proteins, phosphates and other weak acids inside a cell bind most of any H⁺ that appears, so pH moves far less than the acid added would suggest.</p>
+<div class="predict"><b>Predict.</b> With the buffer on, add CO₂ again. How much more HCO₃⁻ do you get than without it, and how far does pH fall? Then set carbonic anhydrase to none and do it again: does it end in a different place, or only take longer?</div>
+<p>With the buffer soaking up the H⁺, the same 1 mM of CO₂ now makes about 0.75 mM of HCO₃⁻, and pH falls only from 7.40 to 7.33. The buffers are what let the reaction run forward. Turn the buffer off and on to compare.</p>
+<p><b>Now carbonic anhydrase matters.</b> With real amounts to convert, the reaction without the enzyme takes seconds; with it, as in a cell, it is effectively instant. The enzyme speeds both directions by the same factor, so it never changes where the reaction ends up, only how fast it gets there. Which way it runs depends only on how far the concentrations sit from equilibrium.</p>` },
+  { name: "3 of 6: the pump and NHE1 (next)", text: "<p>The whole cell appears: the Na⁺/K⁺ pump builds the Na⁺ gradient, and NHE1 spends it to put H⁺ out. Not in this mockup.</p>" },
+  { name: "4 of 6: NBC (next)", text: "<p>NBC brings HCO₃⁻ in with Na⁺; carbonic anhydrase turns it back to CO₂. Not in this mockup.</p>" },
+  { name: "5 of 6: the proton leak (next)", text: "<p>The load: E_H above Vm drives H⁺ in all the time; without extruders pHi falls to Siesjö's passive value. Not in this mockup.</p>" },
+  { name: "6 of 6: the whole cell (next)", text: "<p>Everything at once: today's protons page, both cells and both CO₂ steps. Not in this mockup.</p>" },
+];
+function show() {
+  const st = STEPS[step];
+  document.getElementById("stepname").textContent = st.name;
+  document.getElementById("stepdots").textContent = STEPS.map((_, i) => (i === step ? "●" : "○")).join(" ");
+  document.getElementById("text").innerHTML = st.text;
+  document.getElementById("back").disabled = step === 0; document.getElementById("next").disabled = step === STEPS.length - 1;
+  if (st.buffer !== undefined) { buffered = st.buffer; reset(); conv = 0; dots = []; }
+  if (step === 0) ca = 1; else if (step === 1) ca = +document.getElementById("ca").value;
+  document.getElementById("buffer").hidden = step !== 1;
+  document.getElementById("calabel").hidden = step !== 1;
+  document.getElementById("buffer").textContent = buffered ? "Buffer: on" : "Buffer: off";
+  document.getElementById("ctl").style.opacity = step < 2 ? 1 : 0.35;
+}
+document.getElementById("back").onclick = () => { step = Math.max(0, step - 1); show(); };
+document.getElementById("next").onclick = () => { step = Math.min(STEPS.length - 1, step + 1); show(); };
+document.getElementById("skip").onclick = () => { step = STEPS.length - 1; show(); };
+document.getElementById("ca").value = "10000";
+document.getElementById("addco2").onclick = () => { s.co2 += 1; conv = 0; };
+document.getElementById("addacid").onclick = () => { s.acid += 1; conv = 0; };
+document.getElementById("addhco3").onclick = () => { s.hco3 += 5; conv = 0; };
+document.getElementById("ca").onchange = (e) => { ca = +e.target.value; };
+document.getElementById("buffer").onclick = () => { const h = freeH(s.acid); buffered = !buffered; s.acid = totalAcid(h); conv = 0; dots = dots.filter((d) => d.k !== "buf"); show(); };
+document.getElementById("reset").onclick = () => { reset(); conv = 0; dots = []; };
+reset(); show();
+let last = performance.now();
+(function tick(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; if (step < 2) advance(dt); draw(dt); requestAnimationFrame(tick); })(last);
+window.__test = { add: (k) => document.getElementById(k).click(), state: () => ({ ...s, pH: -Math.log10(freeH(s.acid) / 1e3), conv }) };
+</script></body></html>
