@@ -23,6 +23,7 @@
   --h: #cc79a7;
   --hco3: #e69f00;
   --co2: #9aa5b1;
+  --water: #a9c7de;       /* water, the solvent: pale, and not K⁺'s blue */
   --warn: #ff8a65;
   --radius: 10px;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -119,3 +120,19 @@ canvas.grabbable:active { cursor: grabbing; }
 h3.keepcase { text-transform: none; }
 /* the ion legend under a stage */
 canvas.ionkey { display: block; width: 100%; margin-top: 6px; }
+
+/* the protons step-through (docs/adr/0027, 0028) */
+.stepbar { border-top: 1px solid var(--line); padding-top: 10px; }
+.stepbar .stepname { font-weight: 650; }
+.stepbar .stepdots { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.12em; }
+.stepbar .skip { margin-left: auto; }
+button:disabled { opacity: 0.4; cursor: default; }
+.controls.centered { justify-content: center; }
+.eqhead { font-size: 1.5rem; text-align: center; color: var(--muted); margin: 0 0 6px; }
+.eqhead > span { border-radius: 6px; padding: 0 5px; transition: background 0.3s, color 0.3s; }
+.eqhead > span.on { color: var(--text); background: var(--panel-2); }
+.eqhead .arrow { position: relative; display: inline-block; }
+.eqhead .ca { position: absolute; left: 50%; transform: translateX(-50%); top: -0.55em; font-size: 0.55em; letter-spacing: 0.04em; }
+.caption { text-align: center; font-size: 1.05rem; min-height: 3.2em; margin: 8px 0 0; }
+.molkey { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; font-size: 0.88rem; color: var(--muted); margin-top: 6px; }
+.molkey span { display: inline-flex; align-items: center; gap: 4px; }

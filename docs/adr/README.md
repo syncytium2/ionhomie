@@ -63,3 +63,4 @@ change so the two never disagree.
 | [0025](0025-labels-over-the-ions-and-carbonic-anhydrase-at-its-net.md) | Labels over the ions; carbonic anhydrase shown at its net | Accepted (Tony: "both"); its CA scale superseded by ADR-0026 |
 | [0026](0026-carbonic-anhydrase-on-the-dots-scale-its-equation-in-the-legend.md) | Carbonic anhydrase on the dots' scale; its equation in the legend | Accepted (Tony asked; the forms are Claude's) |
 | [0027](0027-the-protons-page-steps-through-its-players.md) | The protons page steps through its players | Accepted in part (Tony chose the steps and default; the forms are proposed) |
+| [0028](0028-the-step-through-opens-on-the-enzyme.md) | The step-through opens on the enzyme, simply | Accepted (Tony asked for a simple glob, both directions, then "build"; the forms are Claude's) |

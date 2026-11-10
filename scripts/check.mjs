@@ -30,7 +30,8 @@ const ROUTES = {
   rundown: [["click", "#run", 5000]],
   pumps: [["click", "#run", 2500], ["click", "#ouabain", 3000]],
   chloride: [["click", "#preset-nkcc1", 4000]],
-  protons: [["click", "#co2-held", 3000], ["click", "#both", 6000]],
+  // the page opens on its step-through (docs/adr/0027, 0028); the skip leads to the whole cell, which the ion checks need
+  protons: [["click", "#bwd", 2500], ["click", "#skip", 800], ["click", "#co2-held", 3000], ["click", "#both", 6000]],
   homeostat: [["click", "#run", 7000]], // untouched at 100×, the cell runs down: this captures the collapse scene
 };
 
@@ -114,6 +115,32 @@ for (const route of ["pumps", "compartments"]) {
     }
     await page.close();
   }
+}
+// the protons step-through, each step at both widths, and the deep link to the whole cell
+for (const [label, viewport] of [["desktop", { width: 1280, height: 900 }], ["phone", { width: 390, height: 844 }]]) {
+  const page = await browser.newPage({ viewport });
+  page.on("console", (m) => { if (m.type() === "error") problems.push(`protons steps [${label}] console: ${m.text()}`); });
+  page.on("pageerror", (e) => problems.push(`protons steps [${label}] pageerror: ${e.message}`));
+  await page.goto(`${ORIGIN}/#/protons`);
+  await page.waitForTimeout(400);
+  for (const [name, act] of [["enzyme", async () => { await page.waitForTimeout(3600); }],
+                             ["reaction", async () => { await page.click("#next"); await page.click("#add-co2"); await page.waitForTimeout(2500); }],
+                             ["buffers", async () => { await page.click("#next"); await page.click("#add-co2"); await page.waitForTimeout(2500); }],
+                             ["whole", async () => { await page.click("#next"); await page.waitForTimeout(1500); }]]) {
+    try { await act(); } catch (e) { problems.push(`protons steps [${label}] could not reach ${name}: ${e.message.split("\n")[0]}`); }
+    await page.evaluate(() => scrollTo(0, 0));
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    if (over > 1) problems.push(`protons step ${name} [${label}] wider than the viewport by ${over}px`);
+    const first = await page.evaluate(() => !!document.querySelector("main")?.firstElementChild?.querySelector("canvas"));
+    if (!first) problems.push(`protons step ${name} [${label}] the first element under the title row is not the action`);
+    await page.screenshot({ path: join(out, `protons_step-${name}_${label}.png`), fullPage: true });
+  }
+  if (!page.url().endsWith("#/protons/whole")) problems.push(`protons steps [${label}] the whole cell's address is ${page.url()}, not #/protons/whole`);
+  await page.goto(`${ORIGIN}/#/protons/whole`);
+  await page.reload();
+  await page.waitForTimeout(600);
+  if (!(await page.$("#stage"))) problems.push(`protons steps [${label}] #/protons/whole does not open on the whole cell`);
+  await page.close();
 }
 await browser.close();
 cleanup();

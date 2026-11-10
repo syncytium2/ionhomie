@@ -11,7 +11,8 @@ canvas{display:block;width:100%;border-radius:8px;background:#101826}
 .eq{font-size:24px;text-align:center;margin:2px 0 8px;color:var(--muted)}
 .eq span{border-radius:6px;padding:0 5px;transition:background .3s,color .3s}
 .eq span.on{color:var(--text);background:#2a3140}
-.eq .ca{font-size:14px;vertical-align:super}
+.eq .arrow{display:inline-flex;flex-direction:column;align-items:center;line-height:1;vertical-align:-2px}
+.eq .ca{font-size:13px;letter-spacing:.04em;margin-bottom:1px}
 .cap{min-height:3em;margin-top:10px;font-size:18px;text-align:center}
 .key{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 18px;font-size:14px;color:var(--muted);margin-top:10px}
 .key span{display:inline-flex;align-items:center;gap:4px}
@@ -23,7 +24,7 @@ button{font:inherit;font-size:15px;color:var(--text);background:var(--panel2);bo
 </style></head><body><main>
 <div class="banner"><b>Mockup for Tony: the simple start.</b> One carbonic anhydrase as a glob, after Domsic et al. 2008: the whole protein with its cleft (their Fig. 1a), CO₂ held on the oily green surface and HCO₃⁻ on the watery side (Fig. 4a), and a chain of waters on that side (Fig. 1). Molecules are drawn far larger than the protein would make them. The order is simplified: in the real enzyme the water is already on the zinc and gives up its H⁺ in a separate half of the cycle. The detailed version is <code>enzyme.html</code>, kept for later.</div>
 <div class="panel">
-  <div class="eq"><span id="q1">CO₂ + H₂O</span> <span id="q2">⇌<span class="ca"> CA</span></span> <span id="q3">H⁺ + HCO₃⁻</span></div>
+  <div class="eq"><span id="q1">CO₂ + H₂O</span> <span id="q2" class="arrow"><span class="ca">CA</span>⇌</span> <span id="q3">H⁺ + HCO₃⁻</span></div>
   <canvas id="c" height="520"></canvas>
   <div class="cap" id="cap"></div>
   <div class="key">
@@ -114,7 +115,6 @@ function draw(dt) {
   label("the solution", P(30, 128), C.muted, 16, "left");
   const turn = seg(t, T.hold, T.turn), pulse = Math.sin(Math.PI * turn);
   glob(0.015 * pulse);
-  drift(dt);
   WIRE.forEach((p) => water(p, 0.55));
   zinc(pulse);
   label("carbonic anhydrase", P(400, 470), C.text, 22);

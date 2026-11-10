@@ -6,7 +6,8 @@ import { BORN, UPDATED, VERSION, fmtDate, fmtStamp } from "./version.ts";
 
 // The homeostat is a game, not a chapter: it sits after the reading order, apart (docs/adr/0014).
 const GAME = "homeostat";
-const slugFromHash = () => location.hash.replace(/^#\/?/, "");
+// the first segment names the page; a page may read the rest (#/protons/whole)
+const slugFromHash = () => location.hash.replace(/^#\/?/, "").split("/")[0];
 
 /**
  * The nav bar: "ionhomie" with the born-on date and the current version on one line, then every

@@ -1,6 +1,10 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as I from "../core/physics.ts";
 import * as P from "../core/protons.ts";
-import { $, Trace, fmtMv, gauges, loop, ruler, setText, viewPref } from "../views/draw.ts";
+import * as R from "../core/reaction.ts";
+import { $, Trace, fmtMv, gauges, glyph, loop, ruler, setText, viewPref, type KeyExtra } from "../views/draw.ts";
+import { EnzymeView } from "../views/enzyme-view.ts";
+import { ReactionBox } from "../views/reaction-box.ts";
 import { ACID_ANGLE, Lab } from "../views/lab.ts";
 import { CA_KEY, CaView, bufferLedger, overlay, phGauge } from "../views/protons-views.ts";
 import { Below, ModelNote, Readout, ViewPicker, useEngine, IonKey } from "./parts.tsx";
@@ -8,6 +12,8 @@ import { Clock } from "./Rundown.tsx";
 
 // The protons page (docs/adr/0022): the shared cell, whose pH NHE1 and NBC hold far from equilibrium. Two ways to see it:
 // Siesjö's figure (Vm held at −60 mV by a clamp) or the cell as every other chapter runs it (Vm free, near −80 mV).
+// It opens as a step-through (docs/adr/0027, 0028): the enzyme, the reaction in a box, buffers and the enzyme's speed,
+// then the whole cell. "Skip to the whole cell" goes straight there, and #/protons/whole links to it.
 type Mode = "siesjo" | "cell";
 const ANGLE = ACID_ANGLE;
 
@@ -104,7 +110,7 @@ function engine() {
   });
 }
 
-export default function Protons() {
+function WholeCell({ bar }: { bar: ReactNode }) {
   useEngine(engine);
   return (
     <main>
@@ -112,6 +118,7 @@ export default function Protons() {
         <div className="panel">
           <canvas id="stage" />
           <IonKey ions={["Na", "K", "Cl", "A", "H", "HCO3", "CO2"]} extras={[CA_KEY]} />
+          {bar}
           <ViewPicker ions={["H", "HCO3", "Na", "K", "Cl"]} />
           <div className="controls">
             <button id="nhe">Stop NHE</button>
@@ -217,4 +224,185 @@ export default function Protons() {
       </Below>
     </main>
   );
+}
+
+// ---------- the step-through (docs/adr/0027, 0028) ----------
+const STEPS = [
+  { id: "enzyme", name: "The enzyme" },
+  { id: "reaction", name: "The reaction" },
+  { id: "buffers", name: "Buffers, and the enzyme's speed" },
+  { id: "whole", name: "The whole cell" },
+] as const;
+const WHOLE = STEPS.length - 1;
+
+function StepBar({ i, go }: { i: number; go: (i: number) => void }) {
+  return (
+    <div className="controls stepbar">
+      <button id="back" disabled={i === 0} onClick={() => go(i - 1)}>← Back</button>
+      <span className="stepname">{STEPS[i].name}</span>
+      <span className="stepdots" aria-label={`step ${i + 1} of ${STEPS.length}`}>{STEPS.map((_, k) => (k === i ? "●" : "○")).join(" ")}</span>
+      <button id="next" disabled={i === WHOLE} onClick={() => go(i + 1)}>Next →</button>
+      {i < WHOLE
+        ? <button id="skip" className="skip" onClick={() => go(WHOLE)}>Skip to the whole cell ⇥</button>
+        : <button id="from-start" className="skip" onClick={() => go(0)}>Step through from the start</button>}
+    </div>
+  );
+}
+
+/** The equation over the enzyme and the box, with CA over its arrows; part lights the side that is happening. */
+function Equation({ part }: { part: number }) {
+  const on = (k: number) => (part === k ? "on" : "");
+  return (
+    <div className="eqhead" aria-label="CO₂ plus H₂O, reversibly, by carbonic anhydrase, H⁺ plus HCO₃⁻">
+      <span className={on(0)}>CO₂ + H₂O</span> <span className={"arrow " + on(1)}><span className="ca">CA</span>⇌</span> <span className={on(2)}>H⁺ + HCO₃⁻</span>
+    </div>
+  );
+}
+
+/** The enzyme's legend: each molecule drawn as the picture draws it (Tony: no lone circle for a molecule that has three atoms). */
+function MolKey() {
+  const svg = (inner: ReactNode) => <svg width="36" height="24" viewBox="0 0 36 24" aria-hidden="true">{inner}</svg>;
+  return (
+    <div className="molkey">
+      <span>{svg(<><line x1="7" y1="12" x2="29" y2="12" stroke="var(--co2)" strokeWidth="3" /><circle cx="7" cy="12" r="5.5" fill="var(--co2)" /><circle cx="29" cy="12" r="5.5" fill="var(--co2)" /><circle cx="18" cy="12" r="4" fill="#7d8590" /></>)}CO₂</span>
+      <span>{svg(<><line x1="18" y1="14" x2="10" y2="7" stroke="#c9ced6" strokeWidth="2" /><line x1="18" y1="14" x2="27" y2="8" stroke="#c9ced6" strokeWidth="2" /><circle cx="10" cy="7" r="3.2" fill="#e6edf3" /><circle cx="27" cy="8" r="3.2" fill="#e6edf3" /><circle cx="18" cy="14" r="6" fill="var(--water)" /></>)}water</span>
+      <span>{svg(<><g stroke="var(--hco3)" strokeWidth="2.5"><line x1="18" y1="13" x2="18" y2="4" /><line x1="18" y1="13" x2="9" y2="18" /><line x1="18" y1="13" x2="27" y2="18" /></g><line x1="9" y1="18" x2="3" y2="13" stroke="#c9ced6" strokeWidth="2" /><circle cx="3" cy="13" r="2.6" fill="#e6edf3" /><circle cx="18" cy="4" r="4" fill="var(--hco3)" /><circle cx="9" cy="18" r="4" fill="var(--hco3)" /><circle cx="27" cy="18" r="4" fill="var(--hco3)" /><circle cx="18" cy="13" r="3" fill="#b07400" /></>)}HCO₃⁻</span>
+      <span>{svg(<circle cx="18" cy="12" r="4" fill="var(--h)" />)}H⁺, a lone proton</span>
+      <span>{svg(<><defs><radialGradient id="zg" cx="40%" cy="38%" r="60%"><stop offset="0" stopColor="#f4f6f8" /><stop offset="1" stopColor="#7d8590" /></radialGradient></defs><circle cx="18" cy="12" r="8" fill="url(#zg)" /></>)}zinc</span>
+      <span>{svg(<line x1="10" y1="20" x2="26" y2="4" stroke="#7fb069" strokeOpacity=".6" strokeWidth="7" strokeLinecap="round" />)}oily pocket</span>
+    </div>
+  );
+}
+
+function EnzymeStep({ bar }: { bar: ReactNode }) {
+  const [part, setPart] = useState(0), [caption, setCaption] = useState("");
+  const [dir, setDir] = useState<1 | -1>(1), [paused, setPaused] = useState(false);
+  const view = useRef<EnzymeView | null>(null);
+  useEffect(() => {
+    const v = new EnzymeView($<HTMLCanvasElement>("enzyme"), (p, text) => { setPart(p); setCaption(text); });
+    view.current = v;
+    return loop((dt) => v.frame(dt));
+  }, []);
+  const run = (d: 1 | -1) => { view.current?.run(d); setDir(d); setPaused(false); };
+  return (
+    <main>
+      <div className="panel">
+        <Equation part={part} />
+        <canvas id="enzyme" aria-label="One carbonic anhydrase: CO₂ and a water bind in its cleft, it turns over, and H⁺ and HCO₃⁻ leave" />
+        <p className="caption" aria-live="polite">{caption}</p>
+        <MolKey />
+        <div className="controls centered">
+          <button id="fwd" className={dir > 0 ? "on" : ""} aria-pressed={dir > 0} onClick={() => run(1)}>Forward</button>
+          <button id="bwd" className={dir < 0 ? "on" : ""} aria-pressed={dir < 0} onClick={() => run(-1)}>Backward</button>
+          <button id="pause" onClick={() => { const p = !paused; if (view.current) view.current.paused = p; setPaused(p); }}>{paused ? "Play" : "Pause"}</button>
+          <button id="again" onClick={() => run(dir)}>Again</button>
+        </div>
+        {bar}
+      </div>
+      <Below>
+        <p className="lede">Carbonic anhydrase holds a CO₂ and a water in its cleft, side by side, beside a zinc. It turns them into one HCO₃⁻
+          and one H⁺, lets them go, and is ready for the next pair: up to about a million times a second.</p>
+        <div className="predict"><b>Predict.</b> Press <b>Backward</b>. Is anything different about the enzyme when it runs the other way? Then
+          ask: what decides which way it runs?</div>
+        <p>The enzyme has no direction of its own. Run backward, it does the same steps in reverse: HCO₃⁻ and H⁺ go in, CO₂ and water come
+          out. Which way it runs depends on what reaches it, which is the next step's subject.</p>
+        <details>
+          <summary>What the picture is, and what it leaves out</summary>
+          <p>One molecule of carbonic anhydrase II, drawn as a glob with its cleft, after Domsic et al. (2008): the whole protein (their Fig. 1a),
+            CO₂ held on the oily, hydrophobic green surface and HCO₃⁻ on the watery side (Fig. 4a), and a chain of waters on that side (Fig. 1),
+            which carries the proton away through the residue His64. The zinc sits at the bottom of the cleft on three histidines.</p>
+          <p>Simplified on purpose. The molecules are drawn far larger than the protein would make them. The order is compressed: in the real
+            enzyme the water is already on the zinc, and it gives up its H⁺ in a separate half of the cycle, making the zinc's OH⁻ that attacks
+            the CO₂. This is an animation, not a model: it has no rates. The turnover of about 10⁶ per second is the paper's.</p>
+          <p className="src">Domsic JF, Avvaru BS, Kim CU, Gruner SM, Agbandje-McKenna M, Silverman DN, McKenna R (2008). Entrapment of carbon
+            dioxide in the active site of carbonic anhydrase II. J Biol Chem 283:30766–30771. doi:10.1074/jbc.M805353200</p>
+        </details>
+      </Below>
+    </main>
+  );
+}
+
+const BUFFER_KEY: KeyExtra = { draw: (ctx, x, y) => glyph(ctx, "A", x, y, 4), text: "a buffer, about 1 mM per blob", note: "a pink dot on it: the H⁺ it holds" };
+
+function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
+  const [buffered, setBuffered] = useState(buffers);
+  const box = useRef<ReactionBox | null>(null);
+  useEffect(() => {
+    const b = new ReactionBox($<HTMLCanvasElement>("box"), buffers, buffers);
+    b.ca = buffers ? R.CA_CELL : 1;
+    box.current = b;
+    return loop((dt) => b.frame(dt));
+  }, [buffers]);
+  return (
+    <main>
+      <div className="panel">
+        <canvas id="box" aria-label="A box of solution: CO₂ and HCO₃⁻ converting both ways, with the equation, both rates, and running totals" />
+        <IonKey ions={["CO2", "HCO3", "H"]} extras={buffers ? [BUFFER_KEY] : []} />
+        <div className="controls">
+          <button id="add-co2" onClick={() => box.current?.add("co2")}>Add CO₂ (+1 mM)</button>
+          <button id="add-acid" onClick={() => box.current?.add("acid")}>Add acid (+1 mM H⁺)</button>
+          <button id="add-hco3" onClick={() => box.current?.add("hco3")}>Add HCO₃⁻ (+5 mM)</button>
+          {buffers && <button id="buffer" className={buffered ? "on" : ""} aria-pressed={buffered}
+            onClick={() => { const on = !buffered; box.current?.setBuffered(on); setBuffered(on); }}>{buffered ? "Buffer: on" : "Buffer: off"}</button>}
+          {buffers && <label>Carbonic anhydrase <select id="ca" defaultValue={String(R.CA_CELL)} onChange={(e) => { if (box.current) { box.current.ca = +e.target.value; box.current.tally(); } }}>
+            <option value="1">none</option><option value="100">a little (×100)</option><option value={String(R.CA_CELL)}>as in a cell (×10,000)</option>
+          </select></label>}
+          <button id="reset" onClick={() => box.current?.reset()}>Reset</button>
+        </div>
+        {bar}
+      </div>
+      <Below>{buffers ? <>
+        <p className="lede">Buffers take up H⁺. Proteins, phosphates and other weak acids inside a cell bind most of any H⁺ that appears, so pH moves
+          far less than the acid added would suggest.</p>
+        <div className="predict"><b>Predict.</b> With the buffer on, add CO₂. How much HCO₃⁻ do you get this time, and how far does pH fall? Then set
+          carbonic anhydrase to none and add CO₂ again: does it end in a different place, or only take longer?</div>
+        <p>With the buffer taking up the H⁺, the same 1 mM of CO₂ now makes about 0.75 mM of HCO₃⁻, and pH falls only from 7.40 to 7.33. The buffers
+          are what let the reaction run forward. Turn the buffer off and on to compare.</p>
+        <p><b>Now the enzyme's speed shows.</b> With real amounts to convert, the reaction without the enzyme takes seconds (here, about 6 s to get
+          two-thirds of the way); with the enzyme, as in a cell, it is done within a frame. The enzyme speeds both directions by the same factor, so it
+          never changes where the reaction ends up, only how fast it gets there. Which way it runs depends only on how far the concentrations sit
+          from equilibrium.</p>
+        <details><summary>The model, and what it does not claim</summary><BoxModel /></details>
+      </> : <>
+        <p className="lede">The same reaction without the enzyme, in a box of plain solution. CO₂ and water make H⁺ and HCO₃⁻, and H⁺ and HCO₃⁻ make CO₂
+          and water, all the time. At equilibrium the two run equally fast, so nothing changes, though plenty is happening: watch the box, where CO₂
+          rings become HCO₃⁻ triangles and back as often as each other, and the two running totals climb together while the net stays at zero.</p>
+        <div className="predict"><b>Predict.</b> Add acid. Which way does the reaction run, and where does the H⁺ go? Then add CO₂. How much becomes
+          HCO₃⁻?</div>
+        <p>Follow the one marked carbon: it keeps changing form, and spends most of its time as HCO₃⁻, simply because there is twenty times more HCO₃⁻
+          than CO₂. Water is the solvent itself (pure water is 55 mol per liter), so it never runs short and is never drawn as dots: the box is
+          water. For the same reason it is left out of the equilibrium constant, which counts water's activity, about 1 in a dilute solution.</p>
+        <p><b>Which way it runs depends on the concentrations.</b> Add acid and it runs back: the H⁺ meets HCO₃⁻ and leaves as CO₂, so almost all the
+          acid disappears. That is bicarbonate acting as a buffer. Add HCO₃⁻ and it runs back too; add CO₂ and it runs forward.</p>
+        <p><b>But adding CO₂ makes surprisingly little HCO₃⁻ here</b>: about 33 nM, while pH falls from 7.40 to 7.14. The H⁺ it would make has
+          nowhere to go, so a few nanomolar is enough to reach equilibrium, in well under a millisecond. That is the next step.</p>
+        <details><summary>The model, and what it does not claim</summary><BoxModel /></details>
+      </>}</Below>
+    </main>
+  );
+}
+
+function BoxModel() {
+  return <>
+    <p>A sealed box of solution at 37 °C. At equilibrium [H⁺][HCO₃⁻]/[CO₂] = K, with pK 6.1, the value the cell uses. Each direction runs at its own
+      rate, forward = k·[CO₂] and back = (k/K)·[H⁺][HCO₃⁻], and carbonic anhydrase multiplies both by the same factor. The buffer is one weak acid,
+      25 mM with pK 6.9. The uncatalyzed rate (k = 0.13 s⁻¹), the buffer and the enzyme's factor of 10,000 are illustrative, not yet sourced; the
+      equilibrium itself is not. Each ring or triangle is 0.25 mM; the conversions shown are thinned, both ways alike, when they come too fast to see.</p>
+  </>;
+}
+
+const startStep = () => (location.hash.replace(/^#\/?/, "").split("/")[1] === "whole" ? WHOLE : 0);
+
+export default function Protons() {
+  const [i, setI] = useState(startStep);
+  const go = (k: number) => {
+    setI(k);
+    history.replaceState(null, "", k === WHOLE ? "#/protons/whole" : "#/protons");
+  };
+  const bar = <StepBar i={i} go={go} />;
+  const id = STEPS[i].id;
+  if (id === "enzyme") return <EnzymeStep bar={bar} />;
+  if (id === "reaction") return <ReactionStep key="reaction" buffers={false} bar={bar} />;
+  if (id === "buffers") return <ReactionStep key="buffers" buffers bar={bar} />;
+  return <WholeCell bar={bar} />;
 }
