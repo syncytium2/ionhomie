@@ -21,14 +21,16 @@ Derive rather than trust: `git log --oneline -15` · `cat DEPLOYED.md` · `sed -
   fix. In `physics.ts` it adds `Cell.ncx`, NCX current in `netCurrent`, `Snapshot.ncx`, and an `ncxShare` argument to
   `healthyState`; `Ion`, `IONS` and `Bath` stay untouched. It also changes `draw.ts` (an "ncx" pathway), `lab.ts`, and the
   pumps and rundown text. **Do not edit its worktree.**
-- **Agreed order**: NCX merges to main first, after Tony's word "deploy". Then the proton work branches from it, or
-  rebases onto it, before touching `Ion` or `healthyState`. Scoping and questions to Tony conflict with nothing. If the
-  proton work needs `physics.ts` sooner, message that session and agree who goes first. It will send a message when NCX
-  is on main.
-- **ADR numbers**: 0020 belongs to `origin/claude/wizardly-noether-thf1q6`, ADR-0020, "a crossed dot wanders off before it
-  crosses again" (a cloud session, 2026-10-28; Tony: *"trapped moving in and out of the channel"*). The cleanup session is
-  merging that branch into its own, because it fixes the same pile-up. It claims 0021 for NCX. **The proton work starts at
-  0022.** Check `ls docs/adr` before numbering anyway.
+- **Update, later on 2026-11-10: NCX is on local main at 042dd69**, not yet pushed and not deployed (the deploy waits on
+  Tony). It carries ADR-0020, "a crossed dot wanders off before it crosses again" (merged from
+  `origin/claude/wizardly-noether-thf1q6`; Tony: *"trapped moving in and out of the channel"*), and
+  [ADR-0021](../adr/0021-the-na-ca-exchanger-runs-on-the-na-gradient.md), the Na⁺/Ca²⁺ exchanger. The cleanup session
+  reports all 21 tests passing. Main also gained `docs/handoffs/2026-10-23-the-homeostat-game.md`.
+- **Order**: the proton build starts from main at or after 042dd69, never from b175ce5, so it carries NCX before touching
+  `Ion` or `healthyState`. This handoff's branch was cut from b175ce5. Merging it into main conflicts only in
+  `docs/MILESTONES.md`, where both branches appended a row to the end of the Open table; keep both rows.
+- **ADR numbers**: 0020 and 0021 are taken. **The proton work starts at 0022.** Check `ls docs/adr` before numbering
+  anyway.
 - **tonydefazio.com: on hold** since Tony's words on 2026-10-22, *"hold on the tonydefazio.com updates for now"*. Nothing
   has lifted it. Send that session nothing.
 
@@ -143,7 +145,7 @@ item in sour's OPEN table waits on it. The sour session that wrote the brief was
 ## Waiting on Tony
 
 1. A design for the proton page, with the questions above, before any build past it.
-2. **"deploy"** for the cleanup session's NCX and pile-up round, which carries ADR-0020 and ADR-0021.
+2. **"deploy"** for the NCX and pile-up round on local main (042dd69), which carries ADR-0020 and ADR-0021.
 3. The voltage-gated resting channels, dials in the running-cell chapters, and the rest of MILESTONES' open table.
 4. Lifting the tonydefazio.com hold.
 
