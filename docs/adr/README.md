@@ -57,4 +57,4 @@ change so the two never disagree.
 | [0019](0019-atp-is-a-star-and-the-census-is-a-panel.md) | ATP is a star in a star-shaped site; the census is a panel like the magnifier | Accepted (Tony) |
 | [0020](0020-a-crossed-dot-wanders-off-before-it-crosses-again.md) | A crossed dot wanders off before it crosses again, and scarce dots set the thinning | Proposed (Tony reported the problem; the fix is Claude's) |
 | [0021](0021-the-na-ca-exchanger-runs-on-the-na-gradient.md) | The Na⁺/Ca²⁺ exchanger runs on the Na⁺ gradient, and reverses when it fails | Accepted in part (Tony chose to add it; the rate law and share are Claude's) |
-| [0022](0022-a-protons-page-after-chloride-on-siesjos-cell.md) | A protons page after chloride, on Siesjö's cell, with its own small pH model | Proposed (Claude; Tony asked for the page, has not ruled on the design) |
+| [0022](0022-a-protons-page-after-chloride-on-siesjos-cell.md) | A protons page after chloride, on Siesjö's cell, with its own small pH model | Accepted as a whole (Tony: "build it"; the choices are Claude's, not ruled on one by one) |

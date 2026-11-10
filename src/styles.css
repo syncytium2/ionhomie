@@ -19,6 +19,10 @@
   --cl: #e8743b;
   --ca: #2fbf71;
   --a: #8a7f6a;
+  /* the protons page (docs/adr/0022): Okabe–Ito reddish purple and orange; CO₂ a neutral gray ring */
+  --h: #cc79a7;
+  --hco3: #e69f00;
+  --co2: #9aa5b1;
   --warn: #ff8a65;
   --radius: 10px;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -68,7 +72,7 @@ details { background: var(--panel); border: 1px solid var(--line); border-radius
 details summary { cursor: pointer; font-weight: 600; }
 .eq { font-family: var(--mono); background: var(--panel-2); padding: 8px 12px; border-radius: 8px; overflow-x: auto; white-space: pre; font-size: 0.88rem; }
 .src { font-size: 0.8rem; color: var(--muted); }
-.ion-na { color: var(--na); } .ion-k { color: var(--k); } .ion-cl { color: var(--cl); } .ion-ca { color: var(--ca); } .ion-a { color: var(--a); } .vm { color: var(--accent); }
+.ion-na { color: var(--na); } .ion-k { color: var(--k); } .ion-cl { color: var(--cl); } .ion-ca { color: var(--ca); } .ion-a { color: var(--a); } .ion-h { color: var(--h); } .ion-hco3 { color: var(--hco3); } .vm { color: var(--accent); }
 table { border-collapse: collapse; font-size: 0.9rem; }
 td, th { padding: 4px 12px 4px 0; text-align: left; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 600; }
@@ -111,3 +115,5 @@ canvas.grabbable:active { cursor: grabbing; }
 .hs-status { margin: 8px 0 0; color: var(--muted); font-size: 0.9rem; min-height: 1.4em; }
 .hs-status.won { color: var(--text); }
 .hs-status.lost { color: var(--warn); }
+/* a heading whose case carries meaning (pH, pHi) */
+h3.keepcase { text-transform: none; }

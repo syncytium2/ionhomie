@@ -6,14 +6,15 @@ import { chargeLedger } from "../core/physics.ts";
 import { DOT_DENSITY, IONS_PER_SIGN, STAGE } from "./stage-style.ts";
 export { DOT_DENSITY, IONS_PER_SIGN };
 
-export type Species = "Na" | "K" | "Cl" | "Ca" | "A" | "X";
+// H⁺, HCO₃⁻ and CO₂ are drawn only by the protons page (docs/adr/0022)
+export type Species = "Na" | "K" | "Cl" | "Ca" | "A" | "X" | "H" | "HCO3" | "CO2";
 
 export const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const COLOR: Partial<Record<string, string>> = {};
-const VAR: Record<string, string> = { Na: "--na", K: "--k", Cl: "--cl", Ca: "--ca", A: "--a", X: "--text" };
+const VAR: Record<string, string> = { Na: "--na", K: "--k", Cl: "--cl", Ca: "--ca", A: "--a", X: "--text", H: "--h", HCO3: "--hco3", CO2: "--co2" };
 export const color = (ion: string) => COLOR[ion] || (COLOR[ion] = cssVar(VAR[ion] || "--text"));
-export const LABEL: Record<Species, string> = { Na: "Na⁺", K: "K⁺", Cl: "Cl⁻", Ca: "Ca²⁺", A: "A⁻", X: "X⁰" };
-export const Z: Record<Species, number> = { Na: 1, K: 1, Cl: -1, Ca: 2, A: -1, X: 0 };
+export const LABEL: Record<Species, string> = { Na: "Na⁺", K: "K⁺", Cl: "Cl⁻", Ca: "Ca²⁺", A: "A⁻", X: "X⁰", H: "H⁺", HCO3: "HCO₃⁻", CO2: "CO₂" };
+export const Z: Record<Species, number> = { Na: 1, K: 1, Cl: -1, Ca: 2, A: -1, X: 0, H: 1, HCO3: -1, CO2: 0 };
 
 // ---------- formatting ----------
 export const minus = (s: string) => s.replace(/^-/, "−");
@@ -97,14 +98,18 @@ export function glyph(ctx: CanvasRenderingContext2D, ion: Species, x: number, y:
     ctx.quadraticCurveTo(x + r * k, y + r * k, x, y + r * 0.9);
     ctx.quadraticCurveTo(x - r * k, y + r * k, x - r * k, y);
     ctx.fill();
-  } else if (ion === "X") {
+  } else if (ion === "HCO3") {
+    ctx.beginPath();
+    ctx.moveTo(x, y - r * 1.3); ctx.lineTo(x + r * 1.25, y + r * 0.95); ctx.lineTo(x - r * 1.25, y + r * 0.95);
+    ctx.closePath(); ctx.fill();
+  } else if (ion === "X" || ion === "CO2") {
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.stroke();
   } else {
     ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill();
     if (ion === "Ca") { ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, r + 2.2, 0, 2 * Math.PI); ctx.stroke(); }
   }
-  if (r >= 5.5 && ion !== "X") {
+  if (r >= 5.5 && ion !== "X" && ion !== "CO2") {
     ctx.fillStyle = "#0d1117";
     ctx.font = `700 ${Math.round(r * 1.3)}px system-ui, sans-serif`;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -226,7 +231,8 @@ export function gauges(canvas: HTMLCanvasElement, { ions, ci, co, height }: { io
   const H = height || ions.length * rowH + 30;
   const { ctx, w } = fit(canvas, H);
   const lo = Math.log10(1e-5), hi = Math.log10(500);
-  const x0 = 46, x1 = narrow ? w - 8 : w - 96;
+  ctx.font = "12px system-ui, sans-serif";
+  const x0 = Math.max(46, 28 + Math.max(...ions.map((i) => ctx.measureText(LABEL[i]).width))), x1 = narrow ? w - 8 : w - 96;
   const x = (mM: number) => x0 + ((Math.log10(Math.max(mM, 1e-5)) - lo) / (hi - lo)) * (x1 - x0);
   ctx.font = "10px ui-monospace, Menlo, monospace"; ctx.fillStyle = cssVar("--muted"); ctx.textAlign = "center"; ctx.textBaseline = "top";
   for (const [v, lab] of [[1e-4, "0.1µM"], [1e-2, "10µM"], [1, "1mM"], [100, "100mM"]] as const) {
@@ -479,7 +485,7 @@ const VIEW_KEY = "ionhomie.stageView";
 try {
   const saved = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
   if (saved && ["cell", "focus", "census", "lens"].includes(saved.view)) viewPref.view = saved.view;
-  if (saved && ["Na", "K", "Cl", "Ca"].includes(saved.ion)) viewPref.ion = saved.ion;
+  if (saved && ["Na", "K", "Cl", "Ca", "H", "HCO3"].includes(saved.ion)) viewPref.ion = saved.ion;
 } catch { /* storage blocked: the default view */ }
 export function setStageView(view: StageView, ion: Species = viewPref.ion) {
   viewPref.view = view; viewPref.ion = ion;
@@ -494,7 +500,7 @@ const FOCUS_HAZE = 1400; // above this many dots on a side, the focus view draws
 const NA = 6.02214076e23;
 
 export interface Pathway {
-  kind: "channel" | "pump" | "pmca" | "nkcc1" | "kcc2" | "ncx";
+  kind: "channel" | "pump" | "pmca" | "nkcc1" | "kcc2" | "ncx" | "nhe" | "nbc";
   angle: number; ions?: Species[]; open?: boolean; on?: boolean; label?: string; key?: string;
   /** why a pump is stopped: no ATP at all (rundown, ischemia), or blocked with ATP still at hand (ouabain) */
   why?: "noatp" | "blocked";
@@ -985,12 +991,17 @@ export class CellStage {
     } else if (view === "census") {
       const ca = this.inside.Ca;
       if (ca !== undefined) { const n = Math.round(ca * IONS_PER_UM3_PER_MM); targets.push({ ion: "Ca", where: "in", n: n > 500 ? 0 : n }); }
+      // free H⁺ (docs/adr/0022): every ion is a dot, inside and out
+      for (const where of ["in", "out"] as const) {
+        const h = (where === "in" ? this.inside : this.outside).H;
+        if (h !== undefined) { const n = Math.round(h * IONS_PER_UM3_PER_MM); targets.push({ ion: "H", where, n: n > 600 ? 0 : n }); }
+      }
     } else if (view === "lens") {
       const per = (IONS_PER_UM3_PER_MM * 1e-3) / 500; // dots per mM in a 100 nm cube, at 500 ions a dot
-      for (const ion of ["K", "Na", "Cl", "A"] as Species[]) { const c = this.inside[ion]; if (c !== undefined) targets.push({ ion, where: "in", n: Math.round(c * per) }); }
-      for (const ion of ["Na", "Cl", "K", "Ca"] as Species[]) { const c = this.outside[ion]; if (c !== undefined) targets.push({ ion, where: "out", n: Math.round(c * per) }); }
+      for (const ion of ["K", "Na", "Cl", "HCO3", "A"] as Species[]) { const c = this.inside[ion]; if (c !== undefined) targets.push({ ion, where: "in", n: Math.round(c * per) }); }
+      for (const ion of ["Na", "Cl", "K", "HCO3", "Ca"] as Species[]) { const c = this.outside[ion]; if (c !== undefined) targets.push({ ion, where: "out", n: Math.round(c * per) }); }
       // free Ca²⁺ inside a 100 nm cube: a fraction of one ion on average, so now and then one visits
-      const mu = (this.inside.Ca ?? 0) * IONS_PER_UM3_PER_MM * 1e-3;
+      const mu = (this.inside.Ca ?? this.inside.H ?? 0) * IONS_PER_UM3_PER_MM * 1e-3;
       if (this.clock > this.caVisit.until) {
         let k = 0, p = Math.exp(-mu), acc = p; const u = Math.random();
         while (u > acc && k < 50) { k++; p *= mu / k; acc += p; }
@@ -1077,7 +1088,10 @@ export class CellStage {
     if (coCa !== undefined) this.haze(ctx, "Ca", () => ctx.rect(L.outR[0], L.outR[1], L.outR[2], L.outR[3]), L.outR);
     // every free Ca²⁺ ion inside, one ring each (a dot elsewhere is billions; here a ring is one ion)
     ctx.strokeStyle = color("Ca"); ctx.lineWidth = 1.6;
-    for (const d of this.vdots) { ctx.globalAlpha = Math.max(0, d.a); ctx.beginPath(); ctx.arc(d.x, d.y, 3.2, 0, 2 * Math.PI); ctx.stroke(); }
+    for (const d of this.vdots) {
+      if (d.ion !== "Ca") { glyph(ctx, d.ion, d.x, d.y, 3.4, Math.max(0, d.a)); continue; }
+      ctx.globalAlpha = Math.max(0, d.a); ctx.beginPath(); ctx.arc(d.x, d.y, 3.2, 0, 2 * Math.PI); ctx.stroke();
+    }
     ctx.globalAlpha = 1;
     ctx.restore();
     ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(L.bx, L.by, L.bw, L.bh, 12); ctx.stroke();
@@ -1086,8 +1100,11 @@ export class CellStage {
     this.tag(ctx, narrow ? "out, 1 µm³" : "outside: one cubic micrometer", L.mid + L.bw / 4, L.by + 16, "center", cssVar("--text"));
     if (ciCa !== undefined) this.tag(ctx, `${fmt(ciCa * IONS_PER_UM3_PER_MM)} Ca²⁺${narrow ? "" : ", each ring one ion"}`, L.bx + L.bw / 4, L.by + 38, "center", color("Ca"), "700 12px system-ui, sans-serif");
     if (coCa !== undefined) this.tag(ctx, `${fmt(coCa * IONS_PER_UM3_PER_MM)} Ca²⁺`, L.mid + L.bw / 4, L.by + 38, "center", color("Ca"), "700 12px system-ui, sans-serif");
+    for (const [h, x] of [[this.inside.H, L.bx + L.bw / 4], [this.outside.H, L.mid + L.bw / 4]] as const) {
+      if (h !== undefined) this.tag(ctx, `${fmt(h * IONS_PER_UM3_PER_MM)} free H⁺${narrow ? "" : ", each dot one ion"}`, x, L.by + 38, "center", color("H"), "700 12px system-ui, sans-serif");
+    }
     // the other ions, counted, at the foot of each half
-    const rows: Species[] = ["K", "Na", "Cl"];
+    const rows = (["K", "Na", "Cl", "HCO3"] as Species[]).filter((ion) => this.inside[ion] !== undefined || this.outside[ion] !== undefined);
     rows.forEach((ion, i) => {
       const ci = this.inside[ion], co = this.outside[ion], y = L.by + L.bh - 14 - (rows.length - 1 - i) * 18;
       if (ci !== undefined) this.tag(ctx, `${LABEL[ion]} ${fmt(ci * IONS_PER_UM3_PER_MM)}`, L.bx + L.bw / 4, y, "center", color(ion));
@@ -1108,15 +1125,16 @@ export class CellStage {
     // a visiting free Ca²⁺ is a single ion, not a dot of 500: drawn as a ring
     for (let i = 0; i < this.caVisit.n; i++) {
       const x = L.inR[0] + L.inR[2] * (0.3 + 0.2 * i), y = L.inR[1] + L.inR[3] * 0.4;
-      ctx.strokeStyle = color("Ca"); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.stroke();
+      ctx.strokeStyle = color(this.inside.Ca === undefined && this.inside.H !== undefined ? "H" : "Ca"); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.stroke();
     }
     ctx.restore();
     ctx.strokeStyle = acc; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(L.bx, L.by, L.bw, L.bh, 12); ctx.stroke();
     const narrow = g.w < 640;
     this.tag(ctx, narrow ? "in" : "inside: a 100 nm cube", L.bx + L.bw / 4, L.by + 16, "center", cssVar("--text"));
     this.tag(ctx, narrow ? "out" : "outside: a 100 nm cube", L.mid + L.bw / 4, L.by + 16, "center", cssVar("--text"));
-    const mu = (this.inside.Ca ?? 0) * IONS_PER_UM3_PER_MM * 1e-3, out = (this.outside.Ca ?? 0) * IONS_PER_UM3_PER_MM * 1e-3;
+    const mu = (this.inside.Ca ?? this.inside.H ?? 0) * IONS_PER_UM3_PER_MM * 1e-3, out = (this.outside.Ca ?? 0) * IONS_PER_UM3_PER_MM * 1e-3;
     if (this.inside.Ca !== undefined) this.tag(ctx, narrow ? `Ca²⁺ ${mu.toFixed(2)} avg` : mu < 1 ? `free Ca²⁺: ${mu.toFixed(2)} ions on average; usually none${this.caVisit.n ? " (one is visiting)" : ""}` : `free Ca²⁺: ${mu.toFixed(0)} ions`, L.bx + L.bw / 4, L.by + L.bh - 34, "center", color("Ca"));
+    if (this.inside.Ca === undefined && this.inside.H !== undefined) this.tag(ctx, narrow ? `H⁺ ${mu.toFixed(2)} avg` : `free H⁺: ${mu.toFixed(2)} ions on average; usually none${this.caVisit.n ? " (one is visiting)" : ""}`, L.bx + L.bw / 4, L.by + L.bh - 34, "center", color("H"));
     if (this.outside.Ca !== undefined) this.tag(ctx, narrow ? `Ca²⁺ ${Math.round(out).toLocaleString("en-US")}` : `Ca²⁺: ${Math.round(out).toLocaleString("en-US")} ions (${Math.round(out / 500)} dots)`, L.mid + L.bw / 4, L.by + L.bh - 34, "center", color("Ca"));
     this.tag(ctx, narrow ? "100 nm cubes · dot ≈ 500 ions" : "lens: each dot ≈ 500 ions; a ring is one Ca²⁺ ion", L.bx + L.bw - 8, L.by + L.bh - 12, "right");
   }
@@ -1215,6 +1233,8 @@ export class CellStage {
     if (pw.kind === "nkcc1") return ["Na", "K", "Cl", "Cl"];
     if (pw.kind === "kcc2") return ["K", "Cl"];
     if (pw.kind === "ncx") return ["Na", "Na", "Na", "Ca"];
+    if (pw.kind === "nhe") return ["Na", "H"];
+    if (pw.kind === "nbc") return ["Na", "HCO3", "HCO3"];
     return ["Ca"];
   }
   private drawPathway(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, pw: Pathway) {
@@ -1235,8 +1255,8 @@ export class CellStage {
       const p = this.pathways.indexOf(pw), pr = this.protein(p); // PMCA too, so its ATP is drawn
       let o = pr ? pr.o : 1;
       // no Ca²⁺ dots to carry (0.1 µM is too dilute to draw): PMCA and NCX rock at their rates
-      if (pw.kind === "pmca" || pw.kind === "ncx") o = pw.on === false ? 0 : Math.sin(pw.phase || 0);
-      const fill = pw.on === false ? STAGE.off : pw.kind === "pump" ? STAGE.pump : pw.kind === "pmca" ? cssVar("--ca") : pw.kind === "nkcc1" ? STAGE.nkcc1 : pw.kind === "ncx" ? STAGE.ncx : STAGE.kcc2;
+      if (pw.kind === "pmca" || pw.kind === "ncx" || pw.kind === "nhe") o = pw.on === false ? 0 : Math.sin(pw.phase || 0);
+      const fill = pw.on === false ? STAGE.off : pw.kind === "pump" ? STAGE.pump : pw.kind === "pmca" ? cssVar("--ca") : pw.kind === "nkcc1" ? STAGE.nkcc1 : pw.kind === "ncx" || pw.kind === "nhe" || pw.kind === "nbc" ? STAGE.ncx : STAGE.kcc2;
       ctx.rotate(o * 0.16);
       const atpase = pw.kind === "pump" || pw.kind === "pmca";
       ctx.fillStyle = fill;

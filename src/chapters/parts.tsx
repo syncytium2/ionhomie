@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { setStageView, viewPref, type Species, type StageView } from "../views/draw.ts";
+import { LABEL, setStageView, viewPref, type Species, type StageView } from "../views/draw.ts";
 
 /**
  * Start a chapter's imperative engine after mount and stop it on unmount. The engine draws into
@@ -14,8 +14,10 @@ export function useEngine(start: () => () => void) {
  * How the stage shows the ions (docs/adr/0016): the cell, one ion on its own scale, a census of one cubic
  * micrometer, or a magnifier on the membrane. The learner picks; the choice holds on every stage.
  */
-export function ViewPicker() {
+export function ViewPicker({ ions = ["Na", "K", "Cl", "Ca"] }: { ions?: Species[] } = {}) {
   const [view, setView] = useState<StageView>(viewPref.view);
+  // a page that does not carry the remembered ion focuses on its own first one (in memory only)
+  if (!ions.includes(viewPref.ion)) viewPref.ion = ions[0];
   const [ion, setIon] = useState<Species>(viewPref.ion);
   const pick = (v: StageView, i: Species = ion) => { setStageView(v, i); setView(v); setIon(i); };
   const b = (v: StageView, label: string) => (
@@ -27,7 +29,7 @@ export function ViewPicker() {
       {b("cell", "Cell")}
       {b("focus", "One ion")}
       <select aria-label="ion to focus on" value={ion} onChange={(e) => pick("focus", e.target.value as Species)}>
-        <option value="Na">Na⁺</option><option value="K">K⁺</option><option value="Cl">Cl⁻</option><option value="Ca">Ca²⁺</option>
+        {ions.map((i) => <option key={i} value={i}>{LABEL[i]}</option>)}
       </select>
       {b("census", "Census, 1 µm³")}
       {b("lens", "Magnifier")}

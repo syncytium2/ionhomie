@@ -9,6 +9,7 @@ import Ghk from "./Ghk.tsx";
 import Rundown from "./Rundown.tsx";
 import Pumps from "./Pumps.tsx";
 import Chloride from "./Chloride.tsx";
+import Protons from "./Protons.tsx";
 
 export interface Chapter { slug: string; title: string; line: string; C: ComponentType }
 
@@ -21,4 +22,5 @@ export const CHAPTERS: Chapter[] = [
   { slug: "rundown", title: "Rundown", line: "Leaks and no pump: gradients decay, Vm drifts toward zero, the cell swells.", C: Rundown },
   { slug: "pumps", title: "Pumps", line: "The Na⁺/K⁺-ATPase holds the gradients and the volume; PMCA holds Ca²⁺.", C: Pumps },
   { slug: "chloride", title: "Chloride", line: "NKCC1 and KCC2, running on the pump's gradients, set E_Cl and so E_GABA.", C: Chloride },
+  { slug: "protons", title: "Protons", line: "NHE and NBC, running on the Na⁺ gradient, hold pHi far above where H⁺ would settle; buffers hide the acid.", C: Protons },
 ];

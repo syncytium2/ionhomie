@@ -2,14 +2,24 @@
 
 ## Status
 
-Proposed, 2026-11-10, by Claude, for Tony's review of the design mockup
-([`docs/feedback/drafts/protons/`](../feedback/drafts/protons/protons.html)). Tony has not ruled on any of it.
+Accepted as a whole, 2026-11-10. Tony was shown the design mockup
+([`docs/feedback/drafts/protons/`](../feedback/drafts/protons/protons.html)) and asked to rule on the cell, the place in the
+arc, the separate model, the first transporters, the colors and the free-H⁺ dots. He answered *"don't forget a legend for
+the ions. build it"*. Claude took that as approval of the design as proposed, plus a legend; he has not ruled on each
+choice separately. The free-H⁺ question was built as the mockup suggested: both (dots in the census view, the ledger
+beside the gauges).
 
 What Tony has said, with the questions he was answering:
 - To sour, after *"there's no part of sour that i can find that shows cellular proton homeostasis"*: *"ionhomie page now"*
   (recorded in syncytium2/sour, ADR 2026-11-10-d802).
 - Here: *"prepare for a handoff to include proton homeostasis"*.
 - Asked whether to start on the mockup and the Siesjö search: *"yes"*. That approved the mockup, not the design.
+- Shown the mockup with the open choices: *"don't forget a legend for the ions. build it"*.
+
+How it was carried out (2026-11-10, a note that changes no decision): built on branch `protons-design`, not deployed.
+A key of glyphs (Na⁺, H⁺, HCO₃⁻, CO₂) sits under the stage, the first ion legend on any page. On the cell view free H⁺
+appears only as rates (flux arrows, NHE rocking); the census view draws every free H⁺. With metabolic acid on, the
+transport-stopped cell settles at pHi 6.25, below the passive 6.32; the page says so and offers a switch.
 
 ## Context
 
