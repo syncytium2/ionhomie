@@ -118,7 +118,7 @@ export default function Chloride() {
 
       <Below>
         <p className="lede">No pump moves Cl⁻. In the cell so far it has simply settled wherever Vm put it: E_Cl equal to Vm, a passive
-          distribution, with 5.2 mM inside (the 578 chloride lecture's cortical pyramidal neurons: about 5.3 mM). Two cotransporters change
+          distribution, with 5.3 mM inside (the 578 chloride lecture's cortical pyramidal neurons: about 5.3 mM). Two cotransporters change
           that, each running on a gradient the Na⁺/K⁺ pump built. NKCC1 carries 1 Na⁺, 1 K⁺ and 2 Cl⁻ in together, riding the Na⁺ gradient.
           KCC2 carries 1 K⁺ and 1 Cl⁻ out together, riding the K⁺ gradient. Neither moves any net charge.</p>
         <p className="lede">E_Cl matters because GABA<sub>A</sub> receptors are Cl⁻ channels. Where E_Cl sits relative to Vm decides whether GABA

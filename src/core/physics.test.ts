@@ -37,15 +37,17 @@ test("The charge ledger: 100 mV on a 10 µm cell is about 1 K⁺ in 45,000", () 
   close(1 / L.fraction, 45026, 5, "one in");
 });
 
-test("The healthy cell is an exact pump–leak steady state at −80.3 mV", () => {
+test("The healthy cell is an exact pump–leak steady state at −80.1 mV, pHi 7.0", () => {
   const h = I.healthyState();
   const s = I.snapshot(h.cell, h.n);
-  close(s.V * 1000, -80.35, 0.01, "Vm");
+  close(s.V * 1000, -80.08, 0.01, "Vm (−80.35 before H⁺: the H⁺ leak and the Na⁺ NHE and NBC bring in, ADR-0022)");
   close(s.ci.Na, 10, 1e-9); close(s.ci.K, 140, 1e-9); close(s.ci.Ca, 1e-4, 1e-12);
   close(s.E.Cl, s.V, 1e-5, "Cl⁻ is passively distributed");
-  close(s.ci.Cl, 5.24, 0.01, "Cl⁻ inside, mM (the lecture's pyramidal neurons: ~5.3)");
+  close(s.ci.Cl, 5.30, 0.01, "Cl⁻ inside, mM (the lecture's pyramidal neurons: ~5.3)");
   for (const ion of I.IONS) close(s.net[ion], 0, 1e-19, `net ${ion}`);
-  close(s.pump * I.F * 1e12, 11.08, 0.01, "pump current, pA");
+  close(s.pump * I.F * 1e12, 11.45, 0.01, "pump current, pA (it also returns the Na⁺ NHE and NBC bring in)");
+  close(s.ci.pHi, 7.0, 1e-12, "pHi"); close(s.acid.net / s.acid.leak, 0, 1e-4, "net acid, relative to the leak");
+  close(I.netCurrent(h.cell, s.V, s.ci, I.BATH, s.area), 0, 1e-15, "zero net current, the H⁺ leak's included");
   close(s.volume / I.sphere(10e-6).volume, 1, 1e-9, "volume");
 });
 
@@ -57,7 +59,7 @@ test("The pump's direct electrogenic share is about 2.6 mV", () => {
   const h = I.healthyState();
   h.cell.pump.on = false;
   const s = I.snapshot(h.cell, h.n);
-  close(s.V * 1000, -77.78, 0.01, "Vm the instant the pump stops");
+  close(s.V * 1000, -77.45, 0.01, "Vm the instant the pump stops");
 });
 
 test("Without the pump the cell runs down and swells", () => {
@@ -66,10 +68,10 @@ test("Without the pump the cell runs down and swells", () => {
   let n = h.n;
   for (let t = 0; t < 1800; t += 5) n = I.step(h.cell, n, 5).n;
   const s = I.snapshot(h.cell, n);
-  close(s.ci.Na, 114.2, 0.1, "Na⁺ after 30 min");
-  close(s.ci.K, 36.1, 0.1, "K⁺ after 30 min");
-  close(s.V * 1000, -45.2, 0.1, "Vm after 30 min");
-  close(s.volume / I.sphere(10e-6).volume, 1.093, 0.001, "volume after 30 min");
+  close(s.ci.Na, 115.2, 0.1, "Na⁺ after 30 min");
+  close(s.ci.K, 34.5, 0.1, "K⁺ after 30 min");
+  close(s.V * 1000, -44.0, 0.1, "Vm after 30 min");
+  close(s.volume / I.sphere(10e-6).volume, 1.096, 0.001, "volume after 30 min");
 });
 
 test("KCC2 pulls E_Cl below Vm toward E_K; NKCC1 pushes it above Vm", () => {
@@ -192,11 +194,11 @@ test("After ouabain NCX reverses and loads Ca²⁺, though PMCA still runs (digo
     return I.snapshot(h.cell, n);
   };
   const s = run(I.NCX_SHARE);
-  close(s.ci.Ca * 1e3, 2.6, 0.05, "Ca²⁺ after 30 min of ouabain, µM");
+  close(s.ci.Ca * 1e3, 2.73, 0.05, "Ca²⁺ after 30 min of ouabain, µM");
   assert.ok(s.ncx < 0, "NCX reversed: Ca²⁺ in");
   assert.ok(s.V > I.ncxReversal(s.ci, I.BATH), "Vm has crossed above E_NCX");
-  close(s.ci.Na, 114.2, 0.1, "Na⁺ as without NCX");
-  close(s.V * 1000, -45.2, 0.1, "Vm as without NCX");
+  close(s.ci.Na, 115.1, 0.1, "Na⁺ as without NCX");
+  close(s.V * 1000, -44.0, 0.1, "Vm as without NCX");
   const without = run(0);
   assert.ok(without.ci.Ca < 1e-4, `without NCX, Ca²⁺ falls after ouabain: ${without.ci.Ca * 1e3} µM`);
 });
@@ -210,7 +212,7 @@ test("Bath K⁺ moves E_Cl through KCC2 only under a clamp; blocked, E_Cl sits a
     for (let t = 0; t < 40000; t += 2) n = I.step(h.cell, n, 2, bath).n;
     return I.snapshot(h.cell, n, bath);
   };
-  const want: [number, number][] = [[2.5, -104.2], [5, -87.1], [10, -71.1], [15, -62.6]];
+  const want: [number, number][] = [[2.5, -104.2], [5, -87.1], [10, -71.1], [15, -62.5]];
   for (const [ko, ecl] of want) {
     const s = run(ko, I.CCC_PRESETS.recording, I.RECORDING);
     close(s.E.Cl * 1000, ecl, 0.1, `clamped, KCC2, bath K⁺ ${ko} mM`);
@@ -219,5 +221,5 @@ test("Bath K⁺ moves E_Cl through KCC2 only under a clamp; blocked, E_Cl sits a
   }
   // free-running, the effect is mostly Vm's: E_Cl follows bath K⁺ nearly as far with KCC2 blocked
   const f5 = run(5, I.CCC_PRESETS.none, null).E.Cl, f15 = run(15, I.CCC_PRESETS.none, null).E.Cl;
-  close((f15 - f5) * 1000, 21.7, 0.2, "free-running, blocked: E_Cl shift from 5 to 15 mM bath K⁺, mV");
+  close((f15 - f5) * 1000, 21.5, 0.2, "free-running, blocked: E_Cl shift from 5 to 15 mM bath K⁺, mV");
 });

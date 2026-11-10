@@ -80,18 +80,42 @@ export function chargeLedger(radius: number, dV: number, kIn: number, cm = 0.01)
 // Vm is quasi-steady: the voltage at which the net membrane current is zero. The capacitive
 // charge that Vm implies is tiny (see chargeLedger) and is not subtracted from the amounts.
 
-export type Bath = Conc & { X: number };
-export type Amounts = Conc & { A: number };
-export type Inside = Conc & { A: number };
+/** The bath, mM, and its pH. HCO₃⁻ is held by the bath's CO₂ (docs/adr/0022). */
+export type Bath = Conc & { X: number; HCO3: number; pHo: number };
+/** The cell's state: amounts (mol) of each ion and the trapped anion, and its pHi (buffered; not an amount). */
+export type Amounts = Conc & { A: number; pHi: number };
+/** Inside concentrations, mM, with free H⁺ (mM) and HCO₃⁻, which follow pHi. */
+export type Inside = Conc & { A: number; HCO3: number; H: number; pHi: number };
 
 /**
  * The bath: the extracellular values of the Physiol 578 lecture's neuronal table (ohm/Nernst/GHK
- * deck, slide 8): Na⁺ 145, K⁺ 5, Cl⁻ 106, Ca²⁺ 2.5 mM. X stands for the other anions (bicarbonate,
- * phosphate, …), valence −1, sized to make the bath electroneutral: 145 + 5 + 2·2.5 = 106 + 49.
- * Osmolarity 307.5 mOsm.
+ * deck, slide 8): Na⁺ 145, K⁺ 5, Cl⁻ 106, Ca²⁺ 2.5 mM. HCO₃⁻ 25 mM at pH 7.3, Siesjö's extracellular
+ * values (1985, Prog Brain Res 63:121, Fig. 8). X stands for the other anions (phosphate, …), valence −1,
+ * sized to make the bath electroneutral: 145 + 5 + 2·2.5 = 106 + 25 + 24. Osmolarity 307.5 mOsm, as before
+ * HCO₃⁻ was split out of X.
  */
-export const BATH: Bath = { Na: 145, K: 5, Cl: 106, Ca: 2.5, X: 49 };
-export const osmolarity = (c: Bath) => c.Na + c.K + c.Cl + c.Ca + c.X;
+export const BATH: Bath = { Na: 145, K: 5, Cl: 106, Ca: 2.5, HCO3: 25, X: 24, pHo: 7.3 };
+export const osmolarity = (c: Bath) => c.Na + c.K + c.Cl + c.Ca + c.HCO3 + c.X;
+
+// ---------- protons and bicarbonate (docs/adr/0022) ----------
+//
+// CO₂ crosses the membrane freely and carbonic anhydrase is treated as instant, with CO₂ equal on both sides, so
+// [HCO₃⁻]i = [HCO₃⁻]o·10^(pHi − pHo) at every moment and E_HCO₃ = E_H. The state is pHi; acid that enters is mostly
+// bound, so pHi moves by the net acid gained over the buffering power β = β_i + 2.3·[HCO₃⁻]i.
+
+/** mV per pH unit, RT·ln10/F: 61.5 mV at 37 °C. */
+export const slopeMv = (T = T37) => 1000 * rtf(T) * Math.LN10;
+/** Free H⁺, mM. */
+export const hFree = (pH: number) => 1e3 * 10 ** -pH;
+/** [HCO₃⁻]i, mM, for this pHi against this bath. */
+export const hco3In = (pHi: number, bath: Bath) => bath.HCO3 * 10 ** (pHi - bath.pHo);
+/** Buffering power, mM per pH unit: intrinsic, plus the open CO₂/HCO₃⁻ system. */
+export const buffering = (cell: Cell, pHi: number, bath: Bath) => cell.acid.betaI + Math.LN10 * hco3In(pHi, bath);
+/** Acid the buffers take up as pHi moves from pH0 to pH1, mM (positive when pH falls). */
+export const boundAcid = (cell: Cell, bath: Bath, pH0: number, pH1: number) =>
+  cell.acid.betaI * (pH0 - pH1) + (hco3In(pH0, bath) - hco3In(pH1, bath));
+/** Activation of an acid extruder by internal H⁺: 1 / (1 + 10^(n(pHi − pK))). */
+const byPHi = (k: { pK: number; n: number }, pHi: number) => 1 / (1 + 10 ** (k.n * (pHi - k.pK)));
 
 export interface Cell {
   radius: number;
@@ -104,6 +128,18 @@ export interface Cell {
    * is not carried by the cell's ions, so it does not enter the amounts); with holdK, the pipette also holds the K⁺ inside.
    */
   clamp: { V: number; holdK: boolean } | null;
+  /**
+   * Acid and base (docs/adr/0022). PH: the H⁺ leak's permeability, m/s. NHE1 (1 Na⁺ in, 1 H⁺ out) and NBC (taken as the
+   * electroneutral NBCn1, 1 Na⁺ and 1 HCO₃⁻ in) are activated by internal H⁺ and driven by the Na⁺ gradient: rate =
+   * k·area·activation(pHi)·ln(driving ratio), mol/s, so each runs down, stops or reverses as thermodynamics allows.
+   * betaI: intrinsic buffering power, mM per pH unit. (No metabolic acid: made inside without its anion, it would break
+   * electroneutrality, and K⁺ would pile up without limit.)
+   */
+  acid: {
+    PH: number; betaI: number;
+    nhe: { on: boolean; k: number; pK: number; n: number };
+    nbc: { on: boolean; k: number; pK: number; n: number };
+  };
   nkcc1: number;
   kcc2: number;
   zA: number;
@@ -121,6 +157,10 @@ export const defaultCell = (): Cell => ({
   // Na⁺/Ca²⁺ exchanger: conductance S/m², solved in healthyState to carry NCX_SHARE of the resting Ca²⁺ extrusion.
   ncx: { on: true, g: 0 },
   clamp: null,
+  // The H⁺ leak's permeability is illustrative: it sets the resting acid load (about 0.2 mM/min) and so how fast pHi falls
+  // when transport stops. NHE and NBC activation (pK 6.9, Hill n 2) and β_i 10 mM/pH are sour's illustrative values; k is
+  // solved in healthyState so that pHi rests at 7.0, NHE carrying NHE_SHARE of the extrusion.
+  acid: { PH: 7e-5, betaI: 10, nhe: { on: true, k: 0, pK: 6.9, n: 2 }, nbc: { on: true, k: 0, pK: 6.9, n: 2 } },
   // Cation–chloride cotransporters: mol/s per unit of ln(driving ratio).
   nkcc1: 0,
   kcc2: 0,
@@ -152,6 +192,19 @@ export function ncxCurrent(cell: Cell, V: number, ci: Conc, bath: Bath, area: nu
 /** NCX cycles, mol/s: positive is forward (Ca²⁺ out, 3 Na⁺ in, an inward current), negative is reversed. */
 export const ncxRate = (cell: Cell, V: number, ci: Conc, bath: Bath, area: number) => -ncxCurrent(cell, V, ci, bath, area) / F;
 
+/** NHE1, mol/s of H⁺ out (and Na⁺ in). Negative means it runs in reverse. */
+export function nheRate(cell: Cell, ci: Inside, bath: Bath, area: number) {
+  const k = cell.acid.nhe;
+  if (!k.on || !k.k) return 0;
+  return k.k * area * byPHi(k, ci.pHi) * Math.log((bath.Na * ci.H) / (ci.Na * hFree(bath.pHo)));
+}
+/** NBC (NBCn1), mol/s of HCO₃⁻ in (with Na⁺): acid removed. Negative means it runs in reverse. */
+export function nbcRate(cell: Cell, ci: Inside, bath: Bath, area: number) {
+  const k = cell.acid.nbc;
+  if (!k.on || !k.k) return 0;
+  return k.k * area * byPHi(k, ci.pHi) * Math.log((bath.Na * bath.HCO3) / (ci.Na * ci.HCO3));
+}
+
 /** NKCC1, mol/s inward (1 Na⁺, 1 K⁺, 2 Cl⁻ per cycle). Negative means it runs outward. */
 export function nkcc1Rate(cell: Cell, ci: Conc, bath: Bath) {
   if (!cell.nkcc1) return 0;
@@ -163,10 +216,15 @@ export function kcc2Rate(cell: Cell, ci: Conc, bath: Bath) {
   return cell.kcc2 * Math.log((ci.K * ci.Cl) / (bath.K * bath.Cl));
 }
 
-const concentrations = (n: Amounts, volume: number): Inside => ({
+const concentrations = (n: Amounts, volume: number, bath: Bath): Inside => ({
   Na: n.Na / volume, K: n.K / volume, Cl: n.Cl / volume, Ca: n.Ca / volume, A: n.A / volume,
+  HCO3: hco3In(n.pHi, bath), H: hFree(n.pHi), pHi: n.pHi,
 });
-const volumeFor = (n: Amounts, bath: Bath) => (n.Na + n.K + n.Cl + n.Ca + n.A) / osmolarity(bath);
+// water follows instantly: inside osmolarity equals the bath's. HCO₃⁻ is set by pHi, not by its amount, so it takes its
+// share of the osmolarity first and the amounts fill the rest
+const volumeFor = (n: Amounts, bath: Bath) => (n.Na + n.K + n.Cl + n.Ca + n.A) / (osmolarity(bath) - hco3In(n.pHi, bath));
+/** The H⁺ leak, mol/s, outward positive (GHK, so zero exactly at E_H). */
+const hLeak = (cell: Cell, V: number, ci: Inside, bath: Bath, area: number) => area * ghkFlux(cell.acid.PH, 1, V, ci.H, hFree(bath.pHo));
 
 /**
  * Extra transport imposed from outside the model, mol/s per ion, outward positive: the homeostat's
@@ -180,10 +238,14 @@ const extraCurrent = (extra?: Extra) => {
   return i;
 };
 
-/** Net membrane current (A, outward positive) at V: the leaks, the pump's net charge, NCX, and any extra flux. */
-export function netCurrent(cell: Cell, V: number, ci: Conc, bath: Bath, area: number, extra?: Extra) {
+/**
+ * Net membrane current (A, outward positive) at V: the leaks (H⁺'s too), the pump's net charge, NCX, and any extra flux.
+ * NHE and NBC (NBCn1) are electroneutral and carry none.
+ */
+export function netCurrent(cell: Cell, V: number, ci: Inside, bath: Bath, area: number, extra?: Extra) {
   let i = 0;
   for (const ion of IONS) i += area * ghkCurrent(cell.P[ion], ION_Z[ion], V, ci[ion], bath[ion]);
+  i += F * hLeak(cell, V, ci, bath, area);
   return i + F * pumpRate(cell, ci, bath, area) + ncxCurrent(cell, V, ci, bath, area) + extraCurrent(extra);
 }
 
@@ -192,7 +254,7 @@ export function netCurrent(cell: Cell, V: number, ci: Conc, bath: Bath, area: nu
  * The bracket starts at ±200 mV and widens if the root lies outside it (stacked hand carries can
  * push it there), so the answer is never a silent bound.
  */
-export function restingV(cell: Cell, ci: Conc, bath: Bath, area: number, extra?: Extra) {
+export function restingV(cell: Cell, ci: Inside, bath: Bath, area: number, extra?: Extra) {
   let lo = -0.2, hi = 0.2;
   for (let k = 0; k < 8 && netCurrent(cell, lo, ci, bath, area, extra) > 0; k++) lo *= 2;
   for (let k = 0; k < 8 && netCurrent(cell, hi, ci, bath, area, extra) < 0; k++) hi *= 2;
@@ -209,13 +271,18 @@ export interface Snapshot {
   /** the clamp's holding current, A (outward positive), when the cell is clamped; 0 otherwise */
   iClamp: number;
   E: Conc; net: Conc;
+  /**
+   * Acid and base, mol/s: the H⁺ leak (inward positive), NHE (H⁺ out), NBC (HCO₃⁻ in), and the net acid
+   * gained. E_H in volts (= E_HCO₃ here). beta in mM per pH unit.
+   */
+  acid: { leak: number; nhe: number; nbc: number; net: number; EH: number; beta: number };
 }
 
 /** Everything a view wants to draw about the cell right now. */
 export function snapshot(cell: Cell, n: Amounts, bath: Bath = BATH, extra?: Extra): Snapshot {
   const { area } = sphere(cell.radius);
   const volume = volumeFor(n, bath);
-  const ci = concentrations(n, volume);
+  const ci = concentrations(n, volume, bath);
   const V = cell.clamp ? cell.clamp.V : restingV(cell, ci, bath, area, extra);
   const iClamp = cell.clamp ? -netCurrent(cell, V, ci, bath, area, extra) : 0;
   const leak = {} as Conc, E = {} as Conc;
@@ -228,13 +295,16 @@ export function snapshot(cell: Cell, n: Amounts, bath: Bath = BATH, extra?: Extr
   const ncx = ncxRate(cell, V, ci, bath, area);
   const nkcc1 = nkcc1Rate(cell, ci, bath);
   const kcc2 = kcc2Rate(cell, ci, bath);
+  const nhe = nheRate(cell, ci, bath, area), nbc = nbcRate(cell, ci, bath, area);
+  const hIn = -hLeak(cell, V, ci, bath, area);
+  const acid = { leak: hIn, nhe, nbc, net: hIn - nhe - nbc, EH: nernst(1, hFree(bath.pHo), ci.H), beta: buffering(cell, ci.pHi, bath) };
   const net: Conc = {
-    Na: leak.Na + 3 * pump - 3 * ncx - nkcc1 + (extra?.Na ?? 0),
+    Na: leak.Na + 3 * pump - 3 * ncx - nkcc1 - nhe - nbc + (extra?.Na ?? 0),
     K: leak.K - 2 * pump - nkcc1 + kcc2 + (extra?.K ?? 0),
     Cl: leak.Cl - 2 * nkcc1 + kcc2 + (extra?.Cl ?? 0),
     Ca: leak.Ca + pmca + ncx + (extra?.Ca ?? 0),
   };
-  return { V, ci, volume, area, leak, pump, pmca, ncx, iClamp, nkcc1, kcc2, E, net };
+  return { V, ci, volume, area, leak, pump, pmca, ncx, iClamp, nkcc1, kcc2, E, net, acid };
 }
 
 /** Advance the cell by dt seconds (forward Euler on amounts; dt of a second or two is stable here). */
@@ -247,6 +317,8 @@ export function step(cell: Cell, n: Amounts, dt: number, bath: Bath = BATH, extr
       Cl: Math.max(n.Cl - s.net.Cl * dt, 1e-30),
       Ca: Math.max(n.Ca - s.net.Ca * dt, 1e-30),
       A: n.A,
+      // mol/s ÷ m³ is mM/s; the buffers take up all but a sliver of it
+      pHi: n.pHi - (s.acid.net / s.volume / s.acid.beta) * dt,
     },
     s,
   };
@@ -256,12 +328,12 @@ export function step(cell: Cell, n: Amounts, dt: number, bath: Bath = BATH, extr
  * Amounts for a cell of the given radius holding the given internal concentrations, with the
  * impermeant anion chosen so the inside is electroneutral and isosmotic with the bath.
  */
-export function amountsFor(radius: number, ci: Conc, bath: Bath = BATH) {
-  const vol = sphere(radius).volume;
-  const A = osmolarity(bath) - (ci.Na + ci.K + ci.Cl + ci.Ca);
+export function amountsFor(radius: number, ci: Conc, bath: Bath = BATH, pHi = HEALTHY_PHI) {
+  const vol = sphere(radius).volume, hco3 = hco3In(pHi, bath);
+  const A = osmolarity(bath) - (ci.Na + ci.K + ci.Cl + ci.Ca + hco3);
   if (A <= 0) throw new Error("those concentrations leave no room for the impermeant anion");
-  const charge = ci.Na + ci.K + 2 * ci.Ca - ci.Cl; // balanced by zA·A
-  return { n: { Na: ci.Na * vol, K: ci.K * vol, Cl: ci.Cl * vol, Ca: ci.Ca * vol, A: A * vol }, zA: -charge / A };
+  const charge = ci.Na + ci.K + 2 * ci.Ca - ci.Cl - hco3; // balanced by zA·A
+  return { n: { Na: ci.Na * vol, K: ci.K * vol, Cl: ci.Cl * vol, Ca: ci.Ca * vol, A: A * vol, pHi }, zA: -charge / A };
 }
 
 // ---------- the healthy cell every compartment chapter starts from ----------
@@ -269,12 +341,20 @@ export function amountsFor(radius: number, ci: Conc, bath: Bath = BATH) {
 // Not tuned by hand: solved exactly. Fix the lecture's inside values, Na⁺ 10 mM, K⁺ 140 mM and
 // Ca²⁺ 0.1 µM. For Na⁺
 // and K⁺ to be steady, the pump must return 3 Na⁺ for every 2 K⁺ the leaks carry, and also the
-// 3 Na⁺ that NCX brings in for each Ca²⁺ it puts out. That happens at exactly one Vm:
-// 2·leak_Na(V) + 3·leak_K(V) − 6·ncx(V) = 0. That Vm fixes the pump's strength, Cl⁻ sits
+// 3 Na⁺ that NCX brings in for each Ca²⁺ it puts out, and the Na⁺ that NHE and NBC bring in with each acid they
+// remove, which at pHi 7.0 equals the H⁺ the leak lets in. That happens at exactly one Vm:
+// 2·leak_Na(V) + 3·leak_K(V) − 6·ncx(V) − 2·hIn(V) = 0. The H⁺ leak's inward current is then repaid by the Na⁺ the pump
+// returns, so the net current is zero there too. That Vm fixes the pump's strength, Cl⁻ sits
 // passively at E_Cl = Vm, PMCA and NCX share the Ca²⁺ leak, and the impermeant anion is whatever
 // makes the inside electroneutral and isosmotic. physics.test.ts pins the result.
 
 export const HEALTHY_TARGET = { Na: 10, K: 140, Ca: 1e-4 };
+/** The resting pHi: Siesjö's measured 7.0 (1985, Fig. 8). */
+export const HEALTHY_PHI = 7.0;
+/** The share of the resting acid extrusion NHE1 carries; NBC carries the rest. Illustrative. */
+export const NHE_SHARE = 0.6;
+/** The H⁺ leak's permeability, m/s (illustrative): it sets the resting acid load, and so how fast pHi falls when transport stops. */
+export const H_LEAK_P = 7e-5;
 
 /**
  * The share of the resting Ca²⁺ extrusion NCX carries; PMCA carries the rest. Illustrative, not
@@ -286,15 +366,15 @@ export const NCX_SHARE = 0.5;
 // Cotransporter strengths that bring the healthy cell's E_Cl to two measured E_GABA values, solved
 // by bisection and pinned in physics.test.ts. The cell is generic: these say what transport could
 // produce each value, not what any real cell expresses.
-// In this cell, passive Cl⁻ already sits at E_Cl = Vm = −80.3 mV (5.2 mM inside), so KCC2 can only
+// In this cell, passive Cl⁻ already sits at E_Cl = Vm = −80.1 mV (5.3 mM inside), so KCC2 can only
 // push it lower; its preset aims at −85 mV, between Vm and E_K, and is illustrative, not a measurement.
 export const CCC_PRESETS = {
   none: { nkcc1: 0, kcc2: 0 },
-  kcc2: { nkcc1: 0, kcc2: 2.481e-16 }, // E_Cl −85 mV: KCC2-dominated, as in adult cortex (illustrative)
-  gnrh: { nkcc1: 2.8566e-16, kcc2: 0 }, // E_Cl −36.5 mV, E_GABA measured in adult mouse GnRH neurons (DeFazio et al. 2002)
+  kcc2: { nkcc1: 0, kcc2: 2.603e-16 }, // E_Cl −85 mV: KCC2-dominated, as in adult cortex (illustrative)
+  gnrh: { nkcc1: 2.7152e-16, kcc2: 0 }, // E_Cl −36.5 mV, E_GABA measured in adult mouse GnRH neurons (DeFazio et al. 2002)
   // The recording: KCC2 ten times the cortex preset, so it, not the Cl⁻ leak, sets Cl⁻ under the clamp and E_Cl follows E_K
   // (illustrative; with the lecture's large Cl⁻ leak the preset alone moves E_Cl only a few mV)
-  recording: { nkcc1: 0, kcc2: 2.481e-15 },
+  recording: { nkcc1: 0, kcc2: 2.603e-15 },
 };
 
 /**
@@ -304,12 +384,15 @@ export const CCC_PRESETS = {
  */
 export const RECORDING = { V: -0.07, holdK: true };
 
-export function healthyState(target = HEALTHY_TARGET, bath: Bath = BATH, ncxShare = NCX_SHARE) {
+export function healthyState(target = HEALTHY_TARGET, bath: Bath = BATH, ncxShare = NCX_SHARE, PH = H_LEAK_P) {
   const cell = defaultCell();
+  cell.acid.PH = PH;
   const { area } = sphere(cell.radius);
   const leak = (ion: Ion, V: number, c: number) => area * ghkFlux(cell.P[ion], ION_Z[ion], V, c, bath[ion]);
   const ncx = (V: number) => -ncxShare * leak("Ca", V, target.Ca); // forward cycles, mol/s
-  const f = (V: number) => 2 * leak("Na", V, target.Na) + 3 * leak("K", V, target.K) - 6 * ncx(V);
+  const hOut = hFree(bath.pHo), hIn0 = hFree(HEALTHY_PHI);
+  const hIn = (V: number) => -area * ghkFlux(cell.acid.PH, 1, V, hIn0, hOut); // the H⁺ leak, mol/s inward
+  const f = (V: number) => 2 * leak("Na", V, target.Na) + 3 * leak("K", V, target.K) - 6 * ncx(V) - 2 * hIn(V);
   let lo = -0.2, hi = 0.05;
   for (let k = 0; k < 100; k++) { const m = (lo + hi) / 2; if (f(m) > 0) hi = m; else lo = m; }
   const V = (lo + hi) / 2;
@@ -323,9 +406,20 @@ export function healthyState(target = HEALTHY_TARGET, bath: Bath = BATH, ncxShar
   cell.ncx.g = (ncx(V) * F) / (area * (eNcx - V)); // forward cycles = −g·area·(V − E_NCX)/F
   if (!ncxShare) cell.ncx.on = false;
   const Cl = bath.Cl * Math.exp(V / rtf()); // E_Cl = Vm for z = −1
-  const a = amountsFor(cell.radius, { Na: target.Na, K: target.K, Cl, Ca: target.Ca }, bath);
+  const a = amountsFor(cell.radius, { Na: target.Na, K: target.K, Cl, Ca: target.Ca }, bath, HEALTHY_PHI);
   cell.zA = a.zA;
+  solveAcid(cell, V, { Na: target.Na, HCO3: hco3In(HEALTHY_PHI, bath), H: hIn0, pHi: HEALTHY_PHI }, bath, hIn(V));
   return { cell, n: a.n, V };
+}
+
+/** Set NHE's and NBC's k so that, at this Vm and these concentrations, they remove exactly `acidIn` mol/s between them. */
+export function solveAcid(cell: Cell, V: number, ci: Pick<Inside, "Na" | "HCO3" | "H" | "pHi">, bath: Bath, acidIn: number) {
+  const { area } = sphere(cell.radius);
+  const nheUnit = byPHi(cell.acid.nhe, ci.pHi) * Math.log((bath.Na * ci.H) / (ci.Na * hFree(bath.pHo)));
+  const nbcUnit = byPHi(cell.acid.nbc, ci.pHi) * Math.log((bath.Na * bath.HCO3) / (ci.Na * ci.HCO3));
+  cell.acid.nhe.k = (NHE_SHARE * acidIn) / (area * nheUnit);
+  cell.acid.nbc.k = ((1 - NHE_SHARE) * acidIn) / (area * nbcUnit);
+  void V;
 }
 
 // ---------- one compartment, fast channels, fixed concentrations ----------

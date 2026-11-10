@@ -8,8 +8,13 @@ import { $, CellStage, Trace, fmtConc, fmtMv, fmtTime, gauges, ruler, setText, t
 const mv = (v: number) => v * 1000;
 const minutes = (s: number) => (s / 60).toFixed(0) + " min";
 
+/** Where the protons page's pathways sit on the membrane, radians (the leaks and the pump keep theirs). */
+export const ACID_ANGLE = { leak: Math.PI * 0.96, nhe: Math.PI * 1.14, nbc: Math.PI * 0.78, co2: -Math.PI * 0.61 };
+
 export interface LabOpts {
   pump: boolean; ca: boolean; ccc: boolean; speed: number; autorun: boolean;
+  /** draw acid and base: the H⁺ leak, NHE1 and NBC, and HCO₃⁻ dots (docs/adr/0022) */
+  acid?: boolean;
   ions: Species[]; stageHeight: number; wander?: number;
   setup?: (cell: I.Cell, lab: Lab) => void;
   onReset?: () => void;
@@ -20,7 +25,7 @@ export class Lab {
   stage: CellStage;
   traceV?: Trace; traceC?: Trace; traceVol?: Trace; traceCa?: Trace;
   cell!: I.Cell; n!: I.Amounts; bath!: I.Bath; s!: I.Snapshot;
-  t = 0; running = false; vol0 = 1; pumpFull = 0; ref = 1; ncxRef = 1;
+  t = 0; running = false; vol0 = 1; pumpFull = 0; ref = 1; ncxRef = 1; nheRef = 1;
   /** the pump is stopped by a drug with ATP still at hand (ouabain), not by a lack of ATP */
   pumpBlocked = false;
   private lastRec = -1e9;
@@ -78,6 +83,7 @@ export class Lab {
     this.ref = I.snapshot(h.cell, h.n).pump;           // the healthy pump rate: the token scale
     this.ncxRef = Math.abs(I.snapshot(h.cell, h.n).ncx) || 1; // the healthy NCX rate, for its rocking speed
     if (this.o.setup) this.o.setup(this.cell, this);
+    this.nheRef = Math.abs(I.snapshot(this.cell, this.n).acid.nhe) || 1; // NHE's resting rate, for its rocking speed
     this.running = this.o.autorun;
     for (const tr of [this.traceV, this.traceC, this.traceVol, this.traceCa]) tr?.clear();
     this.s = I.snapshot(this.cell, this.n, this.bath, this.extra());
@@ -99,6 +105,13 @@ export class Lab {
     if (this.o.ca) {
       list.push({ kind: "pmca", angle: Math.PI, label: "PMCA", key: "pmca", on: this.cell.pmca.on });
       list.push({ kind: "ncx", angle: Math.PI * 1.3, label: this.ncxLabel(), key: "ncx", on: this.cell.ncx.on });
+    }
+    if (this.o.acid) {
+      const narrow = this.stage.geometry().w < 560; // the long labels would run off a phone's stage
+      const a = this.cell.acid;
+      list.push({ kind: "channel", angle: ACID_ANGLE.leak, ions: ["H"], open: true, label: "H⁺ leak", key: "hleak" });
+      list.push({ kind: "nhe", angle: ACID_ANGLE.nhe, label: narrow ? (a.nhe.on ? "NHE1" : "NHE1: off") : a.nhe.on ? "NHE1: H⁺ out, Na⁺ in" : "NHE1: stopped", key: "nhe", on: a.nhe.on });
+      list.push({ kind: "nbc", angle: ACID_ANGLE.nbc, label: narrow ? (a.nbc.on ? "NBC" : "NBC: off") : a.nbc.on ? "NBC: Na⁺ + HCO₃⁻ in" : "NBC: stopped", key: "nbc", on: a.nbc.on });
     }
     if (this.o.ccc) {
       list.push({ kind: "nkcc1", angle: Math.PI * 0.95, label: "NKCC1", key: "nkcc1", on: this.cell.nkcc1 > 0 });
@@ -158,7 +171,7 @@ export class Lab {
     const fastest = Math.max(...one.map(({ u }) => Math.max(u.efflux, u.influx) * s.area), 5 * s.pump, 4 * Math.abs(s.nkcc1), 2 * Math.abs(s.kcc2)) * perReal;
     // a protein shows a cycle in about 3 s (bind, close, rock, release; the pump does two halves), so cycles
     // beyond ~0.3 per second per protein are thinned with everything else, both ways alike
-    const cycles = Math.max(this.o.pump ? s.pump : 0, this.o.ccc ? Math.abs(s.nkcc1) : 0, this.o.ccc ? Math.abs(s.kcc2) : 0) * perReal;
+    const cycles = Math.max(this.o.pump ? s.pump : 0, this.o.ccc ? Math.abs(s.nkcc1) : 0, this.o.ccc ? Math.abs(s.kcc2) : 0, this.o.acid ? Math.abs(s.acid.nbc) : 0) * perReal;
     // and so that the side with few dots (Na⁺ and Cl⁻ inside, K⁺ outside) is not drawn on faster than its dots can
     // wander away and come back: each dot crosses at most about once per TURN seconds, or the same few dots shuttle
     // in and out of the pore (Tony: "the ions are trapped moving in and out of the channel")
@@ -172,6 +185,7 @@ export class Lab {
     perReal /= k;
     for (const { ion, u } of one) this.stage.flowBulk(at(ion), ion, u.efflux * s.area * perReal, u.influx * s.area * perReal, dt);
     if (this.o.pump && at("pump") >= 0) this.stage.flowGroup(at("pump"), [{ ion: "Na", dir: 1 }, { ion: "Na", dir: 1 }, { ion: "Na", dir: 1 }, { ion: "K", dir: -1 }, { ion: "K", dir: -1 }], s.pump * perReal, dt);
+    if (this.o.acid && at("nbc") >= 0) this.stage.flowGroup(at("nbc"), [{ ion: "Na", dir: -1 }, { ion: "HCO3", dir: -1 }], s.acid.nbc * perReal, dt);
     if (this.o.ccc) {
       this.stage.flowGroup(at("nkcc1"), [{ ion: "Na", dir: -1 }, { ion: "K", dir: -1 }, { ion: "Cl", dir: -1 }, { ion: "Cl", dir: -1 }], s.nkcc1 * perReal, dt);
       this.stage.flowGroup(at("kcc2"), [{ ion: "K", dir: 1 }, { ion: "Cl", dir: 1 }], s.kcc2 * perReal, dt);
@@ -180,6 +194,8 @@ export class Lab {
     for (const p of pw) {
       if (p.key === "pump") p.phase = (p.phase || 0) + dt * 3 * (s.pump / this.ref) * (this.running ? 1 : 0.2);
       if (p.key === "pmca") p.phase = (p.phase || 0) + dt * 2 * (s.pmca > 0 ? 1 : 0);
+      // NHE's H⁺ is far too dilute to draw as dots: it rocks at its rate, like PMCA and NCX
+      if (p.key === "nhe") p.phase = (p.phase || 0) + dt * 2 * Math.min(3, Math.abs(s.acid.nhe) / this.nheRef) * (this.running ? 1 : 0);
       if (p.key === "ncx") { p.phase = (p.phase || 0) + dt * 2 * Math.min(3, Math.abs(s.ncx) / this.ncxRef); p.label = this.ncxLabel(); }
     }
   }
@@ -188,8 +204,14 @@ export class Lab {
     const s = this.s;
     this.flows(dt);
     const NA = 6.02214076e23;
-    this.stage.setConcentrations({ Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A, Ca: s.ci.Ca }, this.bath, s.volume / this.vol0);
-    this.stage.setAmounts({ Na: this.n.Na * NA, K: this.n.K * NA, Cl: this.n.Cl * NA, A: this.n.A * NA });
+    // only the protons page shows H⁺ and HCO₃⁻; elsewhere the views see the bath as they always have
+    const { HCO3: _hco3, pHo: _pHo, ...plain } = this.bath; void _hco3; void _pHo;
+    // the protons page leaves Ca²⁺ out of its views (it does not discuss it), as the others leave out H⁺
+    const { Ca: _ca, ...noCa } = plain; void _ca;
+    const inside = this.o.acid ? { Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A, HCO3: s.ci.HCO3, H: s.ci.H } : { Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A, Ca: s.ci.Ca };
+    const outside = this.o.acid ? { ...noCa, HCO3: this.bath.HCO3, H: I.hFree(this.bath.pHo) } : plain;
+    this.stage.setConcentrations(inside, outside, s.volume / this.vol0);
+    this.stage.setAmounts({ Na: this.n.Na * NA, K: this.n.K * NA, Cl: this.n.Cl * NA, A: this.n.A * NA, ...(this.o.acid ? { HCO3: s.ci.HCO3 * s.volume * NA } : {}) });
     this.stage.setV(s.V * 1000);
     this.stage.step(dt); this.stage.draw();
     const E: Partial<Record<Species, number>> = {}, g: Partial<Record<Species, number>> = {};

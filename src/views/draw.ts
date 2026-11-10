@@ -1284,8 +1284,10 @@ export class CellStage {
     }
     ctx.restore();
     if (pw.label) {
-      const lx = g.cx + Math.cos(pw.angle) * (g.R + 40 * g.k), ly = g.cy + Math.sin(pw.angle) * (g.R + 40 * g.k);
       ctx.font = "600 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      // kept on the stage: at phone width a label beside the cell's edge would otherwise run off it
+      const half = ctx.measureText(pw.label).width / 2 + 4;
+      const lx = Math.max(half, Math.min(g.w - half, g.cx + Math.cos(pw.angle) * (g.R + 40 * g.k))), ly = g.cy + Math.sin(pw.angle) * (g.R + 40 * g.k);
       ctx.lineWidth = 3; ctx.strokeStyle = STAGE.bath; ctx.strokeText(pw.label, lx, ly);
       ctx.fillStyle = cssVar("--text"); ctx.fillText(pw.label, lx, ly);
     }

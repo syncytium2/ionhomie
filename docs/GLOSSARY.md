@@ -18,6 +18,9 @@ Color never carries the meaning alone: the glyph carries the charge. `src/styles
 | **Ca²⁺** | green, `#2fbf71` | circle with a double ring |
 | **Cl⁻** | red-orange, `#e8743b` | diamond marked − |
 | **A⁻** | brown-gray, `#8a7f6a` | large rounded shape (an impermeant intracellular anion, standing for proteins and other trapped anions) |
+| **H⁺** | reddish purple, `#cc79a7` | small circle marked + (the protons chapter; free H⁺ is nanomolar, so the cell view shows only its rates) |
+| **HCO₃⁻** | orange, `#e69f00` | triangle marked − |
+| **CO₂** | gray, `#9aa5b1` | hollow ring (neutral) |
 | **Vm** | yellow, `#f0e442` | the ruler's needle and every Vm trace |
 | links | lavender, `#b4b9ff` | a hue no ion uses |
 
@@ -47,6 +50,9 @@ Color never carries the meaning alone: the glyph carries the charge. `src/styles
 | **GHK equation** | the Goldman–Hodgkin–Katz voltage equation: the Vm at which the net current of several permeable ions is zero. Its **flux equation** gives each ion's flux at any Vm |
 | **rundown** | the decay of gradients when nothing pumps |
 | **pump–leak** | the steady state in which pumps exactly replace what leaks |
+| **pHi**, **pHo** | pH inside and outside; free H⁺ is 10^(−pH) M, about 60 ions per µm³ at pH 7.0 |
+| **buffering power**, **β** | mM of acid it takes to lower pH by one unit; nearly all acid that enters is bound |
+| **passive pHi** | the pHi at which E_H = Vm: pHo + Vm/S, S = 61.5 mV per pH unit at 37 °C |
 | **Donnan equilibrium** | the distribution permeable ions reach around trapped charge; with no pump it draws water in and the cell swells |
 | **electrogenic** | moving net charge per cycle (the Na⁺/K⁺-ATPase: one net + out); **electroneutral** moves none (NKCC1, KCC2) |
 

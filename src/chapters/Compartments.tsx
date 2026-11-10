@@ -12,15 +12,15 @@ function engine() {
   const ci = { Na: s.ci.Na, K: s.ci.K, Cl: s.ci.Cl, A: s.ci.A };
   stage.setConcentrations({ ...ci, Ca: s.ci.Ca }, { Na: bath.Na, K: bath.K, Cl: bath.Cl, Ca: bath.Ca }, 1);
 
-  const inPos = s.ci.Na + s.ci.K + 2 * s.ci.Ca, inNeg = s.ci.Cl - h.cell.zA * s.ci.A;
-  const outPos = bath.Na + bath.K + 2 * bath.Ca, outNeg = bath.Cl + bath.X;
+  const inPos = s.ci.Na + s.ci.K + 2 * s.ci.Ca, inNeg = s.ci.Cl + s.ci.HCO3 - h.cell.zA * s.ci.A;
+  const outPos = bath.Na + bath.K + 2 * bath.Ca, outNeg = bath.Cl + bath.HCO3 + bath.X;
   const f1 = (x: number) => x.toFixed(1);
   $("neutral").innerHTML =
     "<tr><th></th><th>inside</th><th>outside</th></tr>" +
     `<tr><td>positive charge</td><td>${f1(inPos)} mM</td><td>${f1(outPos)} mM</td></tr>` +
     `<tr><td>negative charge</td><td>${f1(inNeg)} mM</td><td>${f1(outNeg)} mM</td></tr>` +
-    `<tr><td>osmolarity</td><td>${f1(s.ci.Na + s.ci.K + s.ci.Cl + s.ci.Ca + s.ci.A)} mOsm</td><td>${f1(I.osmolarity(bath))} mOsm</td></tr>` +
-    `<tr><td colspan="3" class="src">Outside, X⁻ (${bath.X} mM) stands for bicarbonate, phosphate and the other anions; each A⁻ carries ${minus(h.cell.zA.toFixed(2))} charges.</td></tr>`;
+    `<tr><td>osmolarity</td><td>${f1(s.ci.Na + s.ci.K + s.ci.Cl + s.ci.Ca + s.ci.HCO3 + s.ci.A)} mOsm</td><td>${f1(I.osmolarity(bath))} mOsm</td></tr>` +
+    `<tr><td colspan="3" class="src">HCO₃⁻ is ${f1(s.ci.HCO3)} mM inside and ${bath.HCO3} outside (the protons chapter); outside, X⁻ (${bath.X} mM) stands for phosphate and the other anions; each A⁻ carries ${minus(h.cell.zA.toFixed(2))} charges.</td></tr>`;
 
   const draw = () => {
     stage.setV(V);

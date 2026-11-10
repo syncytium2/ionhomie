@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as a whole, 2026-11-10. Tony was shown the design mockup
+Accepted as a whole, 2026-11-10; its separate model superseded by [ADR-0023](0023-h-and-hco3-join-the-shared-cell.md). Tony was shown the design mockup
 ([`docs/feedback/drafts/protons/`](../feedback/drafts/protons/protons.html)) and asked to rule on the cell, the place in the
 arc, the separate model, the first transporters, the colors and the free-H⁺ dots. He answered *"don't forget a legend for
 the ions. build it"*. Claude took that as approval of the design as proposed, plus a legend; he has not ruled on each

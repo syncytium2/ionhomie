@@ -1,5 +1,5 @@
 // protons-views.ts — the views only the protons page needs (docs/adr/0022): a pH gauge, the buffer ledger, and
-// what the stage overlays in its cell view (flux arrows sized by rate, CO₂ crossing, carbonic anhydrase, metabolism).
+// what the stage overlays in its cell view (flux arrows sized by rate, CO₂ crossing, carbonic anhydrase).
 // They draw what core/protons.ts computes and nothing else.
 
 import { cssVar, color, fit, glyph, type CellStage } from "./draw.ts";
@@ -76,12 +76,12 @@ export function bufferLedger(canvas: HTMLCanvasElement, st: { pH0: number; pHi: 
   ctx.fillText(`since pHi ${st.pH0.toFixed(2)}; log scale`, x0, narrow ? 160 : 138);
 }
 
-export interface Overlay { leak: number; nhe: number; nbc: number; metab: number; ref: number; clock: number; leakAngle: number; nheAngle: number; nbcAngle: number }
+export interface Overlay { leak: number; nhe: number; nbc: number; ref: number; clock: number; leakAngle: number; nheAngle: number; nbcAngle: number; co2Angle: number }
 
 /**
  * Drawn on the stage after it draws, in the cell view only: a flux arrow on each pathway, its width set by the rate
  * (relative to the resting load); CO₂ crossing the lipid both ways (equal on both sides, so no net); carbonic
- * anhydrase's reaction; and the acid metabolism makes. Arrows are rates, not particles.
+ * anhydrase's reaction. Arrows are rates, not particles.
  */
 export function overlay(stage: CellStage, canvas: HTMLCanvasElement, o: Overlay) {
   const g = stage.geometry(), ctx = canvas.getContext("2d")!;
@@ -111,7 +111,7 @@ export function overlay(stage: CellStage, canvas: HTMLCanvasElement, o: Overlay)
     ctx.fillStyle = col; ctx.fillText(t, x, y);
   };
   // CO₂ crosses the lipid, not a protein, both ways alike (equal partial pressure on both sides)
-  const ca = Math.PI * 0.72;
+  const ca = o.co2Angle;
   for (let i = 0; i < 4; i++) {
     const u = ((o.clock * 0.25 + i / 4) % 1), dir = i % 2 ? 1 : -1;
     const r = dir > 0 ? g.R - 30 * g.k + u * 60 * g.k : g.R + 30 * g.k - u * 60 * g.k;
@@ -119,13 +119,8 @@ export function overlay(stage: CellStage, canvas: HTMLCanvasElement, o: Overlay)
     glyph(ctx, "CO2", x, y, 4.5, Math.sin(u * Math.PI));
   }
   const [cx2, cy2] = at(ca, g.R + 52 * g.k);
-  tag("CO₂ crosses the lipid freely", cx2, cy2);
+  tag(g.w < 560 ? "CO₂ crosses freely" : "CO₂ crosses the lipid freely", cx2, cy2);
   tag("CA: CO₂ + H₂O ⇌ H⁺ + HCO₃⁻", g.cx, g.cy + g.R * 0.32, cssVar("--text"), "12px system-ui, sans-serif");
-  // metabolism, making acid inside
-  const mx = g.cx - g.R * 0.25, my = g.cy - g.R * 0.25;
-  ctx.setLineDash([3, 3]); ctx.strokeStyle = color("H"); ctx.lineWidth = 1.2; ctx.fillStyle = "#2a2236";
-  ctx.beginPath(); ctx.ellipse(mx, my, 40 * g.k * 0.8, 17 * g.k * 0.8, 0, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
-  tag(o.metab > 0 ? "metabolism: acid" : "metabolism off", mx, my, o.metab > 0 ? color("H") : cssVar("--muted"));
   ctx.restore();
   void STAGE;
 }
