@@ -99,6 +99,11 @@ export interface Cell {
   pump: { on: boolean; imax: number; kNa: number; kK: number };
   pmca: { on: boolean; vmax: number; k: number; n: number };
   ncx: { on: boolean; g: number };
+  /**
+   * A whole-cell recording, or none: Vm held at V volts by the amplifier, which supplies whatever current that takes (it
+   * is not carried by the cell's ions, so it does not enter the amounts); with holdK, the pipette also holds the K⁺ inside.
+   */
+  clamp: { V: number; holdK: boolean } | null;
   nkcc1: number;
   kcc2: number;
   zA: number;
@@ -115,6 +120,7 @@ export const defaultCell = (): Cell => ({
   pmca: { on: true, vmax: 0, k: 0.2e-3, n: 2 },
   // Na⁺/Ca²⁺ exchanger: conductance S/m², solved in healthyState to carry NCX_SHARE of the resting Ca²⁺ extrusion.
   ncx: { on: true, g: 0 },
+  clamp: null,
   // Cation–chloride cotransporters: mol/s per unit of ln(driving ratio).
   nkcc1: 0,
   kcc2: 0,
@@ -200,6 +206,8 @@ export function restingV(cell: Cell, ci: Conc, bath: Bath, area: number, extra?:
 export interface Snapshot {
   V: number; ci: Inside; volume: number; area: number;
   leak: Conc; pump: number; pmca: number; ncx: number; nkcc1: number; kcc2: number;
+  /** the clamp's holding current, A (outward positive), when the cell is clamped; 0 otherwise */
+  iClamp: number;
   E: Conc; net: Conc;
 }
 
@@ -208,7 +216,8 @@ export function snapshot(cell: Cell, n: Amounts, bath: Bath = BATH, extra?: Extr
   const { area } = sphere(cell.radius);
   const volume = volumeFor(n, bath);
   const ci = concentrations(n, volume);
-  const V = restingV(cell, ci, bath, area, extra);
+  const V = cell.clamp ? cell.clamp.V : restingV(cell, ci, bath, area, extra);
+  const iClamp = cell.clamp ? -netCurrent(cell, V, ci, bath, area, extra) : 0;
   const leak = {} as Conc, E = {} as Conc;
   for (const ion of IONS) {
     leak[ion] = area * ghkFlux(cell.P[ion], ION_Z[ion], V, ci[ion], bath[ion]); // mol/s, outward
@@ -225,7 +234,7 @@ export function snapshot(cell: Cell, n: Amounts, bath: Bath = BATH, extra?: Extr
     Cl: leak.Cl - 2 * nkcc1 + kcc2 + (extra?.Cl ?? 0),
     Ca: leak.Ca + pmca + ncx + (extra?.Ca ?? 0),
   };
-  return { V, ci, volume, area, leak, pump, pmca, ncx, nkcc1, kcc2, E, net };
+  return { V, ci, volume, area, leak, pump, pmca, ncx, iClamp, nkcc1, kcc2, E, net };
 }
 
 /** Advance the cell by dt seconds (forward Euler on amounts; dt of a second or two is stable here). */
@@ -234,7 +243,7 @@ export function step(cell: Cell, n: Amounts, dt: number, bath: Bath = BATH, extr
   return {
     n: {
       Na: Math.max(n.Na - s.net.Na * dt, 1e-30),
-      K: Math.max(n.K - s.net.K * dt, 1e-30),
+      K: cell.clamp?.holdK ? n.K : Math.max(n.K - s.net.K * dt, 1e-30),
       Cl: Math.max(n.Cl - s.net.Cl * dt, 1e-30),
       Ca: Math.max(n.Ca - s.net.Ca * dt, 1e-30),
       A: n.A,
@@ -283,7 +292,17 @@ export const CCC_PRESETS = {
   none: { nkcc1: 0, kcc2: 0 },
   kcc2: { nkcc1: 0, kcc2: 2.481e-16 }, // E_Cl −85 mV: KCC2-dominated, as in adult cortex (illustrative)
   gnrh: { nkcc1: 2.8566e-16, kcc2: 0 }, // E_Cl −36.5 mV, E_GABA measured in adult mouse GnRH neurons (DeFazio et al. 2002)
+  // The recording: KCC2 ten times the cortex preset, so it, not the Cl⁻ leak, sets Cl⁻ under the clamp and E_Cl follows E_K
+  // (illustrative; with the lecture's large Cl⁻ leak the preset alone moves E_Cl only a few mV)
+  recording: { nkcc1: 0, kcc2: 2.481e-15 },
 };
+
+/**
+ * DeFazio, Keros, Quick & Hablitz 2000 (J Neurosci 20:8069): in mature neocortical pyramidal neurons, whole-cell, bath K⁺ moved
+ * internal Cl⁻ through KCC2. The recording here: Vm held at −70 mV (chosen, not the paper's protocol) and K⁺ inside held by the
+ * pipette; Cl⁻ free.
+ */
+export const RECORDING = { V: -0.07, holdK: true };
 
 export function healthyState(target = HEALTHY_TARGET, bath: Bath = BATH, ncxShare = NCX_SHARE) {
   const cell = defaultCell();

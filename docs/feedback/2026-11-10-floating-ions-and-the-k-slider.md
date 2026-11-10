@@ -7,7 +7,8 @@
 | note | what changed |
 |---|---|
 | Ions floating on proteins | Fixed: a free ion can no longer enter a channel's or protein's footprint; only bound or crossing ions are drawn there ([ADR-0018](../adr/0018-the-pump-carries-its-atp.md), amended). Free dots on a pathway: 9–16 per frame before, 0 after. |
-| A bath K⁺ slider, as in DeFazio et al. 2000 | Not built yet: waits on Tony's choice of design (below). |
+| A bath K⁺ slider, as in DeFazio et al. 2000 | Tony chose *"Both, side by side"*. Built: a bath K⁺ slider and a furosemide button on the running cell, and a clamp (Vm −70 mV, K⁺ inside held) with a "The recording" preset (KCC2 ×10). Under the clamp E_Cl follows E_K (−105 mV at 2.5 mM, −63 mV at 15 mM); with furosemide it sits at −70 mV. |
+| Lowering the Cl⁻ leak | Tony: *"make a todo on the last point of lowering cl- leak for follow up"*. An open row in MILESTONES. |
 
 ## The K⁺ slider: why it needs a design choice
 

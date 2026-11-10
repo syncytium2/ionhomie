@@ -200,3 +200,24 @@ test("After ouabain NCX reverses and loads Ca²⁺, though PMCA still runs (digo
   const without = run(0);
   assert.ok(without.ci.Ca < 1e-4, `without NCX, Ca²⁺ falls after ouabain: ${without.ci.Ca * 1e3} µM`);
 });
+
+test("Bath K⁺ moves E_Cl through KCC2 only under a clamp; blocked, E_Cl sits at the holding potential (DeFazio et al. 2000)", () => {
+  const run = (ko: number, ccc: { nkcc1: number; kcc2: number }, clamp: { V: number; holdK: boolean } | null) => {
+    const h = I.healthyState();
+    Object.assign(h.cell, ccc); h.cell.clamp = clamp;
+    const bath = { ...I.BATH, K: ko, Cl: I.BATH.Cl + (ko - I.BATH.K) }; // added as KCl
+    let n = h.n;
+    for (let t = 0; t < 40000; t += 2) n = I.step(h.cell, n, 2, bath).n;
+    return I.snapshot(h.cell, n, bath);
+  };
+  const want: [number, number][] = [[2.5, -104.2], [5, -87.1], [10, -71.1], [15, -62.6]];
+  for (const [ko, ecl] of want) {
+    const s = run(ko, I.CCC_PRESETS.recording, I.RECORDING);
+    close(s.E.Cl * 1000, ecl, 0.1, `clamped, KCC2, bath K⁺ ${ko} mM`);
+    close(s.V * 1000, -70, 1e-9, "Vm held");
+    close(run(ko, I.CCC_PRESETS.none, I.RECORDING).E.Cl * 1000, -70, 0.05, `clamped, blocked, bath K⁺ ${ko} mM`);
+  }
+  // free-running, the effect is mostly Vm's: E_Cl follows bath K⁺ nearly as far with KCC2 blocked
+  const f5 = run(5, I.CCC_PRESETS.none, null).E.Cl, f15 = run(15, I.CCC_PRESETS.none, null).E.Cl;
+  close((f15 - f5) * 1000, 21.7, 0.2, "free-running, blocked: E_Cl shift from 5 to 15 mM bath K⁺, mV");
+});
