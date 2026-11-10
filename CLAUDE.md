@@ -17,4 +17,4 @@ scheme; never copy files there by hand). The prototype in `prototype/` has its o
 Every page leads with the action ([ADR-0008](docs/adr/0008-lead-with-the-action.md)); the check
 enforces it, so a failing layout check is a real failure, not noise.
 
-**Latest handoff:** [`docs/handoffs/2026-11-10-protons-step-through.md`](docs/handoffs/2026-11-10-protons-step-through.md): read it after MILESTONES. On branch `protons-steps` until merged.
+**Latest handoff:** [`docs/handoffs/2026-11-10-protons-step-through.md`](docs/handoffs/2026-11-10-protons-step-through.md): read it after MILESTONES, then its last section (paused mid-discussion).

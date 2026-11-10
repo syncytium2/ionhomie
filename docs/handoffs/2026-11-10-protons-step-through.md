@@ -93,3 +93,28 @@ equilibrium seen from inside the catalyst. Put it to Tony as a mockup, as the fi
 - **`label{display:flex}` overrides the `hidden` attribute.** Add `[hidden]{display:none!important}`.
 - **Playwright scrolls a clicked control into view**, so `scripts/check.mjs` scrolls back to the top before it measures.
 - **Two scales for one ion on one stage is the mismatch ADR-0011 forbids, even when both are stated** (ADR-0026).
+
+## Paused, 2026-11-10 evening: combining the reaction and buffers steps (Tony still thinking; do not act yet)
+
+Since this handoff: v0.1.12 put the step-through live (ADR-0028: the enzyme, the reaction, buffers and the enzyme's speed, the
+whole cell; `#/protons/whole` skips to the cell), and v0.1.13 replaced the box's arrows and table with a seesaw and two
+speedometer dials, folded the numbers, and regrouped the whole cell (ADR-0029). Both are merged and pushed.
+
+Tony proposed: *"i think slide 2 and 3 get combined. add CA and see the rate climb. add more nothing changes as its limited by
+availability. and add backwards/forwards reaction. discuss"*. Claude proposed one step, "The reaction, and the enzyme": it opens
+with no enzyme at rest; an "Add CA" control turns both dials up together while the seesaw stays level; "Push forward" (CO₂) and
+"Push backward" (acid) tip the seesaw, which rights itself in seconds without the enzyme and in a blink with it. The buffer stays
+on from the start (without it a push converts only 33 nM, so the enzyme has nothing visible to speed).
+
+Physics caveat Claude raised: in solution more enzyme never plateaus the dials (each tenfold more enzyme, tenfold both rates;
+CO₂ at 1.2 mM is far below Km ≈ 10 mM). What stops changing is where a push ends (set by availability) and how long it takes in
+any sense that can be seen; in a cell, CO₂ crossing the membrane and the transporters then set the pace.
+
+Tony's notes before leaving: *"x10k means what? more enzyme? we can try 2. do not act yet still thinking"*.
+- **"2"** was Claude's second question: a time-to-rebalance readout beside the dials (about 6 s, 0.6 s, 60 ms, 6 ms, then under a
+  millisecond as the enzyme goes from none to ×10,000). Tony: we can try it, once he decides.
+- **"×10k" answered:** the model multiplies both rate constants by one factor, which stands for the enzyme's total activity
+  (how much enzyme × how fast each one works). ×10,000 means the cell's carbonic anhydrase speeds the reaction ten-thousandfold over
+  plain solution. It is an illustrative order of magnitude, not yet sourced (MILESTONES: source the box's constants). Labeling it
+  "enzyme activity" or "amount of enzyme" rather than "×10,000" is open.
+- Still undecided: whether the CA control is a stepped slider or a repeated "Add CA" button (Claude leaned to the button).
