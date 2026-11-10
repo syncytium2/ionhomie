@@ -674,6 +674,27 @@ export class CellStage {
     if (Math.sign(pr.o) !== side) { pr.phase = "toSide"; pr.t = 0; pr.from = pr.o; pr.to = side; } // rock over empty first
     else { pr.phase = "wait"; pr.t = 0; pr.waited = 0; }
   }
+  /**
+   * A free ion cannot sit where a channel or transport protein is: it would hide behind it or float on top of it
+   * (Tony: "the pore is a black rectangle that some ions can hide behind"; then "ions are still floating on proteins").
+   * Only an ion bound to a protein or crossing a pore is drawn there. A free dot that wanders into a pathway's footprint
+   * is set back just outside it, on its own side of the membrane.
+   */
+  private keepOff(q: Particle, g: ReturnType<CellStage["geometry"]>) {
+    const k = g.k * 1.35, m = 2.5 + STAGE.dotR / k; // a dot's own radius as margin, in the pathway's units
+    for (const pw of this.pathways) {
+      const a = pw.angle, cx = g.cx + Math.cos(a) * g.R, cy = g.cy + Math.sin(a) * g.R;
+      const dx = q.x - cx, dy = q.y - cy;
+      const lx = (-Math.sin(a) * dx + Math.cos(a) * dy) / k, ly = (-Math.cos(a) * dx - Math.sin(a) * dy) / k;
+      // half-widths of the drawn body (drawPathway): a channel 14 × 12, a protein 17 × 15, which rocks a little
+      const hx = (pw.kind === "channel" ? 14 : 20) + m, hy = (pw.kind === "channel" ? 12 : 18) + m;
+      if (Math.abs(lx) >= hx || Math.abs(ly) >= hy) continue;
+      const ny = q.where === "in" ? hy : -hy; // out to its own face: y is inward
+      q.x = cx + (-Math.sin(a) * lx - Math.cos(a) * ny) * k; q.y = cy + (Math.cos(a) * lx - Math.sin(a) * ny) * k;
+      const vn = -Math.cos(a) * q.vx - Math.sin(a) * q.vy; // the inward part of its velocity
+      if (vn * ny < 0) { q.vx += Math.cos(a) * vn * 1.5; q.vy += Math.sin(a) * vn * 1.5; } // turn it back from the protein
+    }
+  }
   /** World position of a point in a pathway's own frame (x along the membrane, y inward). */
   private local(p: number, g: ReturnType<CellStage["geometry"]>, lx: number, ly: number) {
     const a = this.pathways[p].angle, k = g.k * 1.35, cx = g.cx + Math.cos(a) * g.R, cy = g.cy + Math.sin(a) * g.R;
@@ -816,6 +837,7 @@ export class CellStage {
         if (q.y < 6 || q.y > g.h - 6) q.vy *= -1;
         q.x = Math.max(6, Math.min(g.w - 6, q.x)); q.y = Math.max(6, Math.min(g.h - 6, q.y));
       }
+      this.keepOff(q, g);
       q.a = q.dying ? q.a - dt * 1.5 : Math.min(1, q.a + dt * 1.5);
     }
     this.parts = this.parts.filter((q) => !(q.dying && q.a <= 0));

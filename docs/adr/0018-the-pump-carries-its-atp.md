@@ -28,6 +28,11 @@ Two stage fixes from the same review:
   rests ~3 s before it can cross again, by any pathway.
 - *"the pore is a black rectangle that some ions can hide behind or get cutoff"*: the membrane, its charge and its proteins are
   drawn first and every ion on top.
+  *Amended 2026-11-10:* on top was not enough (Tony: *"ions are still floating on proteins. i thought we were going to make
+  this not possible"*). A free ion now cannot enter a channel's or protein's footprint at all: one that wanders in is set
+  back just outside, on its own side of the membrane (`CellStage.keepOff`). Only an ion bound to a protein or crossing a
+  pore is drawn there. Measured: free dots drawn on a pathway fell from 9–16 per frame to 0 on the home, pumps and chloride
+  stages.
 
 ## Consequences
 
