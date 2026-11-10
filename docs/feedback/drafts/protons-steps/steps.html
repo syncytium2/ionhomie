@@ -61,20 +61,53 @@ function advance(dt) {
   const x = toEq(), r = rates(), lam = Math.abs(r.f - r.b) > 1e-15 ? Math.abs((r.f - r.b) / x) : ca * KH * 2;
   const dx = x * (1 - Math.exp(-Math.min(50, lam * dt)));
   s.co2 -= dx; s.hco3 += dx; s.acid += dx; t += dt; conv += dx;
+  const rr = rates(); fwdTot += rr.f * dt; backTot += rr.b * dt; // each direction's running total: both climb at equilibrium
 }
 // ---- the picture ----
 const cv = document.getElementById("c"), ctx = cv.getContext("2d");
 const C = { co2: "#9aa5b1", hco3: "#e69f00", h: "#cc79a7", a: "#8a7f6a", text: "#e6edf3", muted: "#9aa5b1", acc: "#f0e442", line: "#2b3442" };
 const PER_DOT = 0.25; // mM per dot, both CO₂ and HCO₃⁻: one stated scale
 let dots = [], conv = 0, flashes = [], trace = [];
+// the dynamic equilibrium, made visible: conversions both ways in the box, two running totals, one carbon followed
+let fwdTot = 0, backTot = 0, events = [], acc = { f: 0, b: 0 }, thin = 1, tagAsHCO3 = 0, tagTime = 0;
+const tally = () => { fwdTot = 0; backTot = 0; tagAsHCO3 = 0; tagTime = 0; };
+function launch(kind) {
+  // a dot of this kind, not already converting, at random (the followed one as likely as any other)
+  const pool = dots.filter((d) => d.k === kind && !d.busy);
+  if (!pool.length) return;
+  const d = pool[(Math.random() * pool.length) | 0]; d.busy = true;
+  const a = Math.random() * 6.283;
+  events.push({ d, fwd: kind === "co2", t: 0, hx: Math.cos(a) * 26, hy: Math.sin(a) * 26 });
+}
+function stepEvents(dt) {
+  const r = rates(), fr = r.f / PER_DOT, br = r.b / PER_DOT;
+  thin = Math.max(1, Math.max(fr, br) / 2.5); // show at most a few a second, both ways thinned alike
+  acc.f += (fr / thin) * dt; acc.b += (br / thin) * dt;
+  while (acc.f >= 1) { acc.f -= 1; launch("co2"); }
+  while (acc.b >= 1) { acc.b -= 1; launch("hco3"); }
+  for (const e of events) {
+    e.t += dt / 0.9;
+    if (e.t >= 0.5 && !e.swapped) { e.swapped = true; e.d.k = e.fwd ? "hco3" : "co2"; }
+    if (e.t >= 1) e.d.busy = false;
+  }
+  events = events.filter((e) => e.t < 1);
+  const tagged = dots.find((d) => d.tag);
+  if (tagged) { tagTime += dt; if (tagged.k === "hco3") tagAsHCO3 += dt; }
+}
 function fit() { const w = cv.clientWidth, d = Math.min(2, devicePixelRatio || 1); cv.width = w * d; cv.height = 440 * d; ctx.setTransform(d, 0, 0, d, 0, 0); return w; }
 function syncDots(box) {
   const want = { co2: Math.round(s.co2 / PER_DOT), hco3: Math.round(s.hco3 / PER_DOT), buf: buffered ? Math.round(BT / 1) : 0 };
   for (const k of ["co2", "hco3", "buf"]) {
-    let have = dots.filter((d) => d.k === k);
-    while (have.length < want[k]) { const d = { k, x: box.x + 10 + Math.random() * (box.w - 20), y: box.y + 10 + Math.random() * (box.h - 20), vx: 0, vy: 0 }; dots.push(d); have.push(d); }
-    while (have.length > want[k]) { const d = have.pop(); dots.splice(dots.indexOf(d), 1); if (k === "co2" || k === "hco3") flashes.push({ x: d.x, y: d.y, k, life: 1 }); }
+    let have = dots.filter((d) => d.k === k && !d.busy);
+    const n = dots.filter((d) => d.k === k).length;
+    // the conversions shown swap dots one at a time, so the counts may stray by one or two before the next swap evens them
+    const tol = k === "buf" ? 0 : 2;
+    let need = want[k] - n;
+    if (Math.abs(need) <= tol && dots.length) continue;
+    while (need > 0) { const d = { k, x: box.x + 10 + Math.random() * (box.w - 20), y: box.y + 10 + Math.random() * (box.h - 20), vx: 0, vy: 0 }; dots.push(d); need--; }
+    while (need < 0 && have.length) { const i = have.findIndex((d) => !d.tag), d = have.splice(i < 0 ? 0 : i, 1)[0]; dots.splice(dots.indexOf(d), 1); flashes.push({ x: d.x, y: d.y, k, life: 1 }); need++; }
   }
+  if (!dots.some((d) => d.tag)) { const c = dots.find((d) => d.k === "co2"); if (c) c.tag = true; } // one carbon, followed
 }
 function glyph(k, x, y, r, a = 1) {
   ctx.save(); ctx.globalAlpha = a;
@@ -100,16 +133,29 @@ function draw(dt) {
   ctx.fillStyle = "#14202f"; ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(box.x, box.y, box.w, box.h, 10); ctx.fill(); ctx.stroke();
   syncDots(box);
   for (const d of dots) {
+    if (d.busy) { glyph(d.k, d.x, d.y, 4); continue; } // converting: it holds still
     d.vx += -d.vx * dt + 14 * Math.sqrt(dt) * (Math.random() - 0.5) * 3; d.vy += -d.vy * dt + 14 * Math.sqrt(dt) * (Math.random() - 0.5) * 3;
     d.x = Math.min(box.x + box.w - 8, Math.max(box.x + 8, d.x + d.vx * dt)); d.y = Math.min(box.y + box.h - 8, Math.max(box.y + 8, d.y + d.vy * dt));
     glyph(d.k, d.x, d.y, d.k === "buf" ? 4 : 4);
   }
   // a buffer molecule carrying an H⁺: the bound fraction, drawn as an H⁺ on that many buffer blobs
   if (buffered) { const h = freeH(s.acid), bound = BT * h / (h + KB), nb = Math.round(bound / BT * dots.filter((d) => d.k === "buf").length); let i = 0; for (const d of dots) if (d.k === "buf" && i++ < nb) glyph("h", d.x + 5, d.y - 3, 3.2); }
+  for (const e of events) {
+    // the dot converting glows; an H⁺ leaves it (forward) or arrives at it (back), and the buffers or the HCO₃⁻ take it
+    ctx.strokeStyle = C.acc; ctx.globalAlpha = Math.sin(e.t * Math.PI) * 0.8; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(e.d.x, e.d.y, 9, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+    const u = e.fwd ? Math.max(0, (e.t - 0.5) * 2) : Math.min(1, e.t * 2), k = e.fwd ? u : 1 - u;
+    glyph("h", e.d.x + e.hx * k, e.d.y + e.hy * k, 4, e.fwd ? 1 - u : u);
+  }
+  const tg = dots.find((d) => d.tag);
+  if (tg) {
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.2; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(tg.x, tg.y, 11, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = "11px system-ui"; ctx.fillStyle = "#ffffff"; ctx.textAlign = "left"; ctx.fillText("one carbon, followed", Math.min(tg.x + 14, box.x + box.w - 120), tg.y - 12);
+  }
   for (const f of flashes) { f.life -= dt * 1.2; glyph(f.k, f.x, f.y, 6, Math.max(0, f.life)); }
   flashes = flashes.filter((f) => f.life > 0);
   const tag = (txt, x, y, col = C.muted, font = "12px system-ui", boxed = false) => { ctx.font = font; ctx.textAlign = "left"; ctx.textBaseline = "middle"; if (boxed) { const tw = ctx.measureText(txt).width; ctx.fillStyle = "rgba(13,17,23,0.85)"; ctx.fillRect(x - 4, y - 9, tw + 8, 18); } ctx.fillStyle = col; ctx.fillText(txt, x, y); };
   tag(`each ring or triangle ≈ ${PER_DOT} mM${buffered ? (narrow ? "; blob ≈ 1 mM buffer" : "; each blob ≈ 1 mM of buffer, with an H⁺ when it carries one") : ""}`, box.x + 8, box.y + box.h - 12, C.muted, "12px system-ui", true);
+  tag(thin > 1.5 ? `conversions shown: 1 in ${Math.round(thin).toLocaleString("en-US")}, both ways alike` : "every conversion shown", box.x + 8, box.y + 34, C.acc, "12px system-ui", true);
   if (!narrow) tag(`the box is water, 55 M: at this scale, about ${Math.round(55500 / PER_DOT / 1000)} thousand dots more`, box.x + 8, box.y + box.h - 32, "#a9c7de", "12px system-ui", true);
   tag(narrow ? `free H⁺ ${(freeH(s.acid) * 1e6).toFixed(0)} nM: too few to draw` : `free H⁺: ${(freeH(s.acid) * 1e6).toFixed(0)} nM, far too few to draw at this scale`, box.x + 8, box.y + 14, C.h, "12px system-ui", true);
   // the equation, with both directions drawn and the net beneath
@@ -126,7 +172,7 @@ function draw(dt) {
       // a drop of water, and why it is never short
       ctx.strokeStyle = "#a9c7de"; ctx.lineWidth = 1.6; ctx.beginPath();
       ctx.moveTo(cx, gy - 7); ctx.quadraticCurveTo(cx + 7, gy + 2, cx, gy + 6); ctx.quadraticCurveTo(cx - 7, gy + 2, cx, gy - 7); ctx.stroke();
-      ctx.font = "11px system-ui"; ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.fillText("55 M", cx, gy + 17);
+      ctx.font = "11px system-ui"; ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.fillText("the solvent", cx, gy + 17);
     } else if (sym[i]) { glyph(sym[i], cx, gy, 6); }
     tx += widths[i];
   });
@@ -140,13 +186,13 @@ function draw(dt) {
   if (!narrow) tag(step === 0 ? "arrow widths: rates, log scale" : "arrow widths: rates, log scale; carbonic anhydrase multiplies both alike", ex + ew * 0.32, ey + 140);
   // the readouts
   const pH = -Math.log10(freeH(s.acid) / 1e3), ry = narrow ? ey + 162 : 262;
-  const rows = [["CO₂", s.co2.toFixed(2) + " mM", C.co2], ["HCO₃⁻", s.hco3.toFixed(2) + " mM", C.hco3], ["pH", pH.toFixed(2), C.h], ["converted since the last change", (conv >= 0 ? "+" : "") + (Math.abs(conv) < 0.001 ? (conv * 1e6).toFixed(0) + " nM" : conv.toFixed(3) + " mM") + (conv >= 0 ? " forward" : " back"), C.muted], ["time", t.toFixed(1) + " s", C.muted]];
-  if (!narrow) rows.forEach(([k, v, col], i) => { tag(k, ex + ew * 0.32, ry + i * 26, C.muted, "13px system-ui"); tag(v, ex + ew * 0.32 + 230, ry + i * 26, col, "600 15px ui-monospace, Menlo, monospace"); });
-  else tag(`CO₂ ${s.co2.toFixed(2)} · HCO₃⁻ ${s.hco3.toFixed(1)} mM · pH ${pH.toFixed(2)} · ${t.toFixed(1)} s`, 14, ry, C.text, "13px system-ui");
+  const rows = [["CO₂", s.co2.toFixed(2) + " mM", C.co2], ["HCO₃⁻", s.hco3.toFixed(2) + " mM", C.hco3], ["pH", pH.toFixed(2), C.h], ["CO₂ → HCO₃⁻, so far", fwdTot.toFixed(1) + " mM", C.co2], ["HCO₃⁻ → CO₂, so far", backTot.toFixed(1) + " mM", C.hco3], ["net, so far", (conv >= 0 ? "+" : "") + (Math.abs(conv) < 0.001 ? (conv * 1e6).toFixed(0) + " nM" : conv.toFixed(3) + " mM"), C.acc], ["the followed carbon, time as HCO₃⁻", tagTime > 1 ? Math.round((100 * tagAsHCO3) / tagTime) + "%" : "—", "#ffffff"], ["time", t.toFixed(1) + " s", C.muted]];
+  if (!narrow) rows.forEach(([k, v, col], i) => { tag(k, ex + ew * 0.32, ry + i * 22, C.muted, "13px system-ui"); tag(v, ex + ew * 0.32 + 230, ry + i * 22, col, "600 14px ui-monospace, Menlo, monospace"); });
+  else { tag(`CO₂ ${s.co2.toFixed(2)} · HCO₃⁻ ${s.hco3.toFixed(1)} mM · pH ${pH.toFixed(2)} · ${t.toFixed(1)} s`, 14, ry, C.text, "13px system-ui"); tag(`so far → ${fwdTot.toFixed(1)} mM, ← ${backTot.toFixed(1)} mM, net ${conv >= 0 ? "+" : ""}${Math.abs(conv) < 0.001 ? (conv * 1e6).toFixed(0) + " nM" : conv.toFixed(2) + " mM"}`, 14, ry + 20, C.acc, "13px system-ui"); }
 }
 // ---- the steps ----
 const STEPS = [
-  { name: "1 of 6: the reaction", buffer: false, text: `<p><b>CO₂ and water make carbonic acid's two halves, H⁺ and HCO₃⁻, and they make CO₂ again.</b> Water is the solvent itself, 55 M, so it never runs short and is never drawn as dots: the box is water. Both directions run all the time. At equilibrium they run equally fast, so nothing changes, though plenty is happening.</p>
+  { name: "1 of 6: the reaction", buffer: false, text: `<p><b>CO₂ and water make carbonic acid's two halves, H⁺ and HCO₃⁻, and they make CO₂ again.</b> Water is the solvent itself (pure water is 55 mol per liter), so it never runs short and is never drawn as dots: the box is water. For the same reason it is left out of the equilibrium constant: what counts there is water's activity, which in a dilute solution stays at about 1, so it is folded into K (pK 6.1). Both directions run all the time. At equilibrium they run equally fast, so nothing changes, though plenty is happening: watch the box, where CO₂ rings become HCO₃⁻ and HCO₃⁻ become CO₂ as often as each other, and the two running totals climb together while the net stays at zero. Follow the one marked carbon: it keeps changing form, and spends most of its time as HCO₃⁻, simply because there is twenty times more HCO₃⁻ than CO₂.</p>
 <div class="predict"><b>Predict.</b> Add acid. Which way does the reaction run, and where does the H⁺ go? Then add CO₂. How much becomes HCO₃⁻?</div>
 <p><b>Which way it runs depends on the concentrations.</b> Add acid and it runs back: the H⁺ meets HCO₃⁻ and leaves as CO₂, so most of the acid disappears. That is bicarbonate acting as a buffer. Add HCO₃⁻ and it runs back too; add CO₂ and it runs forward.</p>
 <p><b>But adding CO₂ makes surprisingly little HCO₃⁻ here</b>: about 30 nM, while pH falls 0.26. The H⁺ it would make has nowhere to go, so a few nanomolar is enough to reach equilibrium, in well under a millisecond. That is the next step.</p>` },
@@ -165,7 +211,7 @@ function show() {
   document.getElementById("stepdots").textContent = STEPS.map((_, i) => (i === step ? "●" : "○")).join(" ");
   document.getElementById("text").innerHTML = st.text;
   document.getElementById("back").disabled = step === 0; document.getElementById("next").disabled = step === STEPS.length - 1;
-  if (st.buffer !== undefined) { buffered = st.buffer; reset(); conv = 0; dots = []; }
+  if (st.buffer !== undefined) { buffered = st.buffer; reset(); conv = 0; dots = []; events = []; tally(); }
   if (step === 0) ca = 1; else if (step === 1) ca = +document.getElementById("ca").value;
   document.getElementById("buffer").hidden = step !== 1;
   document.getElementById("calabel").hidden = step !== 1;
@@ -176,14 +222,14 @@ document.getElementById("back").onclick = () => { step = Math.max(0, step - 1); 
 document.getElementById("next").onclick = () => { step = Math.min(STEPS.length - 1, step + 1); show(); };
 document.getElementById("skip").onclick = () => { step = STEPS.length - 1; show(); };
 document.getElementById("ca").value = "10000";
-document.getElementById("addco2").onclick = () => { s.co2 += 1; conv = 0; };
-document.getElementById("addacid").onclick = () => { s.acid += 1; conv = 0; };
-document.getElementById("addhco3").onclick = () => { s.hco3 += 5; conv = 0; };
+document.getElementById("addco2").onclick = () => { s.co2 += 1; conv = 0; tally(); };
+document.getElementById("addacid").onclick = () => { s.acid += 1; conv = 0; tally(); };
+document.getElementById("addhco3").onclick = () => { s.hco3 += 5; conv = 0; tally(); };
 document.getElementById("ca").onchange = (e) => { ca = +e.target.value; };
 document.getElementById("buffer").onclick = () => { const h = freeH(s.acid); buffered = !buffered; s.acid = totalAcid(h); conv = 0; dots = dots.filter((d) => d.k !== "buf"); show(); };
-document.getElementById("reset").onclick = () => { reset(); conv = 0; dots = []; };
+document.getElementById("reset").onclick = () => { reset(); conv = 0; dots = []; events = []; tally(); };
 reset(); show();
 let last = performance.now();
-(function tick(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; if (step < 2) advance(dt); draw(dt); requestAnimationFrame(tick); })(last);
-window.__test = { add: (k) => document.getElementById(k).click(), state: () => ({ ...s, pH: -Math.log10(freeH(s.acid) / 1e3), conv }) };
+(function tick(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; if (step < 2) { advance(dt); stepEvents(dt); } draw(dt); requestAnimationFrame(tick); })(last);
+window.__test = { add: (k) => document.getElementById(k).click(), state: () => ({ ...s, pH: -Math.log10(freeH(s.acid) / 1e3), conv, fwdTot, backTot, thin, tagPct: tagTime ? tagAsHCO3 / tagTime : null }) };
 </script></body></html>
