@@ -14,7 +14,8 @@ canvas{display:block;width:100%;border-radius:8px;background:#101826}
 .eq .ca{font-size:14px;vertical-align:super}
 .cap{min-height:3em;margin-top:10px;font-size:18px;text-align:center}
 .key{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 18px;font-size:14px;color:var(--muted);margin-top:10px}
-.key i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.key span{display:inline-flex;align-items:center;gap:4px}
+button.on{background:#2d3a1f;border-color:var(--ok)}
 .controls{display:flex;justify-content:center;gap:10px;margin-top:12px}
 button{font:inherit;font-size:15px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 14px;cursor:pointer}
 .below{max-width:720px;margin:18px auto 0}
@@ -26,17 +27,18 @@ button{font:inherit;font-size:15px;color:var(--text);background:var(--panel2);bo
   <canvas id="c" height="520"></canvas>
   <div class="cap" id="cap"></div>
   <div class="key">
-    <span><i style="background:var(--co2)"></i>CO₂</span>
-    <span><i style="background:var(--w)"></i>water</span>
-    <span><i style="background:var(--hco3)"></i>HCO₃⁻</span>
-    <span><i style="background:var(--h)"></i>H⁺</span>
-    <span><i style="background:#c9ced6"></i>zinc</span>
-    <span><i style="background:#7fb069"></i>oily pocket</span>
+    <span><svg width="36" height="24" viewBox="0 0 36 24" aria-hidden="true"><line x1="7" y1="12" x2="29" y2="12" stroke="#9aa5b1" stroke-width="3"/><circle cx="7" cy="12" r="5.5" fill="#9aa5b1"/><circle cx="29" cy="12" r="5.5" fill="#9aa5b1"/><circle cx="18" cy="12" r="4" fill="#7d8590"/></svg>CO₂</span>
+    <span><svg width="36" height="24" viewBox="0 0 36 24" aria-hidden="true"><line x1="18" y1="14" x2="10" y2="7" stroke="#c9ced6" stroke-width="2"/><line x1="18" y1="14" x2="27" y2="8" stroke="#c9ced6" stroke-width="2"/><circle cx="10" cy="7" r="3.2" fill="#e6edf3"/><circle cx="27" cy="8" r="3.2" fill="#e6edf3"/><circle cx="18" cy="14" r="6" fill="#56b4e9"/></svg>water</span>
+    <span><svg width="36" height="24" viewBox="0 0 36 24" aria-hidden="true"><g stroke="#e69f00" stroke-width="2.5"><line x1="18" y1="13" x2="18" y2="4"/><line x1="18" y1="13" x2="9" y2="18"/><line x1="18" y1="13" x2="27" y2="18"/></g><line x1="9" y1="18" x2="3" y2="13" stroke="#c9ced6" stroke-width="2"/><circle cx="3" cy="13" r="2.6" fill="#e6edf3"/><circle cx="18" cy="4" r="4" fill="#e69f00"/><circle cx="9" cy="18" r="4" fill="#e69f00"/><circle cx="27" cy="18" r="4" fill="#e69f00"/><circle cx="18" cy="13" r="3" fill="#b07400"/></svg>HCO₃⁻</span>
+    <span><svg width="36" height="24" viewBox="0 0 36 24" aria-hidden="true"><circle cx="18" cy="12" r="4" fill="#cc79a7"/></svg>H⁺, a lone proton</span>
+    <span><svg width="36" height="24" viewBox="0 0 36 24" aria-hidden="true"><defs><radialGradient id="zg" cx="40%" cy="38%" r="60%"><stop offset="0" stop-color="#f4f6f8"/><stop offset="1" stop-color="#7d8590"/></radialGradient></defs><circle cx="18" cy="12" r="8" fill="url(#zg)"/></svg>zinc</span>
+    <span><svg width="36" height="24" viewBox="0 0 36 24" aria-hidden="true"><line x1="10" y1="20" x2="26" y2="4" stroke="#7fb069" stroke-opacity=".6" stroke-width="7" stroke-linecap="round"/></svg>oily pocket</span>
   </div>
-  <div class="controls"><button id="pause">Pause</button><button id="again">Again</button></div>
+  <div class="controls"><button id="fwd" class="on">Forward</button><button id="bwd">Backward</button><button id="pause">Pause</button><button id="again">Again</button></div>
 </div>
 <section class="below">
 <p>Carbonic anhydrase holds a CO₂ and a water in its cleft, side by side, beside a zinc. It turns them into one HCO₃⁻ and one H⁺, lets them go, and is ready for the next pair: up to about a million times a second.</p>
+<p>Press <b>Backward</b> and the same enzyme does the same steps in reverse: HCO₃⁻ and H⁺ go in, CO₂ and water come out. The enzyme does not choose a direction; which way it runs depends on what reaches it.</p>
 <p class="src">Domsic JF et al. (2008) Entrapment of carbon dioxide in the active site of carbonic anhydrase II. J Biol Chem 283:30766–30771. doi:10.1074/jbc.M805353200</p>
 </section>
 </main>
@@ -99,11 +101,11 @@ const T = { arrive: 2.6, hold: 3.4, turn: 4.6, leave: 6.8, rest: 8.6, end: 9.4 }
 const CO2_IN = [P(640, 40), P(530, 110), P(450, 240)], W_IN = [P(170, 50), P(300, 100), P(368, 170), P(402, 288)];
 const CB = P(450, 240), OW = P(402, 288);          // bound: CO₂'s carbon against the oily wall; the water on the zinc
 const BOUND = { c: P(430, 264), o1: P(440, 236), o2: P(456, 280) }; // the HCO₃⁻ they make (the water's oxygen is the third)
-const HCO3_OUT = [P(0, 0), P(-30, -110), P(-90, -240)];             // HCO₃⁻ leaves by the mouth, on the watery side
+const HCO3_OUT = [P(0, 0), P(-30, -110), P(-90, -190)];             // HCO₃⁻ leaves by the mouth, on the watery side
 const WIRE = [P(350, 236), P(334, 182)];                            // the chain of waters on the watery wall (Fig. 1)
 const H_OUT = (h0) => [h0, add(WIRE[0], 0, -18), add(WIRE[1], 0, -18), P(296, 112), P(200, 56)];
 
-let t = 0, paused = false, last = performance.now();
+let t = 0, paused = false, dir = 1, last = performance.now(); // dir −1 plays the same turn in reverse
 const q = ["q1", "q2", "q3"].map((id) => document.getElementById(id)), cap = document.getElementById("cap");
 function say(k, s) { q.forEach((e, i) => e.classList.toggle("on", i === k)); if (cap.dataset.k !== String(k) + s) { cap.innerHTML = s; cap.dataset.k = String(k) + s; } }
 
@@ -119,11 +121,12 @@ function draw(dt) {
   label("oily pocket", P(560, 250), "#a9c98f", 18, "left");
   label("zinc", P(440, 336), C.muted, 16, "left");
 
-  const arrive = seg(t, 0.2, T.arrive), leave = seg(t, T.turn + 0.2, T.leave), fade = 1 - seg(t, T.rest, T.end);
+  const enter = seg(t, 0, 0.25), arrive = seg(t, 0.2, T.arrive), leave = seg(t, T.turn + 0.2, T.leave), fade = 1 - seg(t, T.rest, T.end);
   if (t < T.hold) {
     // CO₂ and water come in and settle in their places
-    co2(along(CO2_IN, arrive)); water(along(W_IN, arrive));
-    say(0, t < T.arrive ? "CO₂ and a water drift into the cleft." : "CO₂ settles on the oily pocket; the water sits on the zinc.");
+    co2(along(CO2_IN, arrive), enter); water(along(W_IN, arrive), enter);
+    if (dir > 0) say(0, t < T.arrive ? "CO₂ and a water drift into the cleft." : "CO₂ settles on the oily pocket; the water sits on the zinc.");
+    else say(0, "CO₂ and water leave, and the enzyme is ready for the next pair.");
   } else {
     // the turnover: CO₂'s oxygens open to 120°, the water's oxygen bonds the carbon, one hydrogen leaves as H⁺
     const k = turn, out = leave, dx = along(HCO3_OUT, out);
@@ -137,17 +140,20 @@ function draw(dt) {
     if (k < 0.5) bond(OW, hp, "#c9ced6", 3, 1 - k * 2);
     atom(hp, 7.5, mixc(C.hy, C.h, k), al);
     if (k > 0.95) { label("HCO₃⁻", add(shift(c), 38, -6), C.hco3, 20, "left", al); label("H⁺", add(hp, -16, -16), C.h, 20, "right", al); }
-    if (t < T.turn) say(1, "The enzyme turns over: CO₂ and water become HCO₃⁻ and H⁺.");
-    else say(2, "HCO₃⁻ and H⁺ leave, and the enzyme is ready for the next pair: up to a million times a second.");
+    if (dir > 0) { if (t < T.turn) say(1, "The enzyme turns over: CO₂ and water become HCO₃⁻ and H⁺."); else say(2, "HCO₃⁻ and H⁺ leave, and the enzyme is ready for the next pair: up to a million times a second."); }
+    else { if (t < T.turn) say(1, "The enzyme turns over backward: HCO₃⁻ and H⁺ become CO₂ and water."); else say(2, "HCO₃⁻ comes into the cleft, and H⁺ comes in along the chain of waters."); }
   }
 }
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (!paused) { t += dt; if (t > T.end) t = 0; }
+  if (!paused) { t += dir * dt; if (t > T.end) t = 0; if (t < 0) t = T.end; }
   draw(paused ? 0 : dt);
   requestAnimationFrame(frame);
 }
 document.getElementById("pause").onclick = (e) => { paused = !paused; e.target.textContent = paused ? "Play" : "Pause"; };
-document.getElementById("again").onclick = () => { t = 0; paused = false; document.getElementById("pause").textContent = "Pause"; };
+function run(d) { dir = d; t = d > 0 ? 0 : T.end; paused = false; document.getElementById("pause").textContent = "Pause"; document.getElementById("fwd").classList.toggle("on", d > 0); document.getElementById("bwd").classList.toggle("on", d < 0); }
+document.getElementById("again").onclick = () => run(dir);
+document.getElementById("fwd").onclick = () => run(1);
+document.getElementById("bwd").onclick = () => run(-1);
 window.addEventListener("resize", fit); fit(); requestAnimationFrame(frame);
 </script></body></html>
