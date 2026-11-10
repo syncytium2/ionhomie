@@ -23,7 +23,7 @@ select{font:inherit;font-size:14px;color:var(--text);background:var(--panel2);bo
 </style></head><body><main>
 <div class="banner"><b>Mockup for Tony: the first two steps.</b> A working sketch, not the app. Rate constants are placeholders to be sourced: the uncatalyzed hydration rate (0.13 s⁻¹ at 37 °C) and the buffer (25 mM, pK 6.9).</div>
 <div class="panel">
-  <canvas id="c" height="420"></canvas>
+  <canvas id="c" height="440"></canvas>
   <div class="stepbar">
     <button id="back">← Back</button>
     <span class="name" id="stepname"></span>
@@ -67,7 +67,7 @@ const cv = document.getElementById("c"), ctx = cv.getContext("2d");
 const C = { co2: "#9aa5b1", hco3: "#e69f00", h: "#cc79a7", a: "#8a7f6a", text: "#e6edf3", muted: "#9aa5b1", acc: "#f0e442", line: "#2b3442" };
 const PER_DOT = 0.25; // mM per dot, both CO₂ and HCO₃⁻: one stated scale
 let dots = [], conv = 0, flashes = [], trace = [];
-function fit() { const w = cv.clientWidth, d = Math.min(2, devicePixelRatio || 1); cv.width = w * d; cv.height = 420 * d; ctx.setTransform(d, 0, 0, d, 0, 0); return w; }
+function fit() { const w = cv.clientWidth, d = Math.min(2, devicePixelRatio || 1); cv.width = w * d; cv.height = 440 * d; ctx.setTransform(d, 0, 0, d, 0, 0); return w; }
 function syncDots(box) {
   const want = { co2: Math.round(s.co2 / PER_DOT), hco3: Math.round(s.hco3 / PER_DOT), buf: buffered ? Math.round(BT / 1) : 0 };
   for (const k of ["co2", "hco3", "buf"]) {
@@ -94,9 +94,9 @@ function logW(r) { return 1 + 10 * Math.max(0, (Math.log10(Math.max(r, 1e-7)) + 
 function fmtR(r) { return r >= 0.01 ? r.toFixed(2) : r >= 1e-4 ? r.toExponential(1).replace("e-", "×10⁻").replace(/⁻(\d)/, (m, d) => "⁻" + "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]) : r.toExponential(0); }
 function draw(dt) {
   const w = fit(), narrow = w < 640;
-  ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, w, 420);
+  ctx.fillStyle = "#101826"; ctx.fillRect(0, 0, w, 440);
   // the box of solution, on the left (top on a phone)
-  const box = narrow ? { x: 10, y: 10, w: w - 20, h: 180 } : { x: 14, y: 14, w: w * 0.42, h: 392 };
+  const box = narrow ? { x: 10, y: 10, w: w - 20, h: 170 } : { x: 14, y: 14, w: w * 0.42, h: 412 };
   ctx.fillStyle = "#14202f"; ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(box.x, box.y, box.w, box.h, 10); ctx.fill(); ctx.stroke();
   syncDots(box);
   for (const d of dots) {
@@ -110,28 +110,43 @@ function draw(dt) {
   flashes = flashes.filter((f) => f.life > 0);
   const tag = (txt, x, y, col = C.muted, font = "12px system-ui", boxed = false) => { ctx.font = font; ctx.textAlign = "left"; ctx.textBaseline = "middle"; if (boxed) { const tw = ctx.measureText(txt).width; ctx.fillStyle = "rgba(13,17,23,0.85)"; ctx.fillRect(x - 4, y - 9, tw + 8, 18); } ctx.fillStyle = col; ctx.fillText(txt, x, y); };
   tag(`each ring or triangle ≈ ${PER_DOT} mM${buffered ? (narrow ? "; blob ≈ 1 mM buffer" : "; each blob ≈ 1 mM of buffer, with an H⁺ when it carries one") : ""}`, box.x + 8, box.y + box.h - 12, C.muted, "12px system-ui", true);
+  if (!narrow) tag(`the box is water, 55 M: at this scale, about ${Math.round(55500 / PER_DOT / 1000)} thousand dots more`, box.x + 8, box.y + box.h - 32, "#a9c7de", "12px system-ui", true);
   tag(narrow ? `free H⁺ ${(freeH(s.acid) * 1e6).toFixed(0)} nM: too few to draw` : `free H⁺: ${(freeH(s.acid) * 1e6).toFixed(0)} nM, far too few to draw at this scale`, box.x + 8, box.y + 14, C.h, "12px system-ui", true);
   // the equation, with both directions drawn and the net beneath
-  const ex = narrow ? 14 : w * 0.47, ey = narrow ? 228 : 70, ew = narrow ? w - 28 : w * 0.5;
-  ctx.font = `600 ${narrow ? 19 : 26}px system-ui`; ctx.textAlign = "center"; ctx.fillStyle = C.text;
-  ctx.fillText("CO₂ + H₂O  ⇌  H⁺ + HCO₃⁻", ex + ew / 2, ey);
+  const ex = narrow ? 14 : w * 0.47, ey = narrow ? 222 : 56, ew = narrow ? w - 28 : w * 0.5;
+  // the equation term by term, each term's symbol beneath it (water too: the solvent, never drawn as dots)
+  const fs = narrow ? 19 : 26, terms = ["CO₂", " + ", "H₂O", "  ⇌  ", "H⁺", " + ", "HCO₃⁻"], sym = ["co2", null, "water", null, "h", null, "hco3"];
+  ctx.font = `600 ${fs}px system-ui`; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillStyle = C.text;
+  const widths = terms.map((t) => ctx.measureText(t).width), total = widths.reduce((a, b) => a + b, 0);
+  let tx = ex + ew / 2 - total / 2;
+  terms.forEach((t, i) => {
+    ctx.font = `600 ${fs}px system-ui`; ctx.fillStyle = C.text; ctx.textAlign = "left"; ctx.fillText(t, tx, ey);
+    const cx = tx + widths[i] / 2, gy = ey + fs * 0.95;
+    if (sym[i] === "water") {
+      // a drop of water, and why it is never short
+      ctx.strokeStyle = "#a9c7de"; ctx.lineWidth = 1.6; ctx.beginPath();
+      ctx.moveTo(cx, gy - 7); ctx.quadraticCurveTo(cx + 7, gy + 2, cx, gy + 6); ctx.quadraticCurveTo(cx - 7, gy + 2, cx, gy - 7); ctx.stroke();
+      ctx.font = "11px system-ui"; ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.fillText("55 M", cx, gy + 17);
+    } else if (sym[i]) { glyph(sym[i], cx, gy, 6); }
+    tx += widths[i];
+  });
   const r = rates(), a0 = narrow ? ex + 4 : ex + ew * 0.32, a1 = narrow ? ex + ew - 4 : ex + ew * 0.92;
-  const fy = narrow ? ey + 40 : ey + 34, by = narrow ? ey + 78 : ey + 58;
+  const fy = narrow ? ey + 74 : ey + 70, by = narrow ? ey + 112 : ey + 94;
   arrowBar(a0, a1, fy, logW(r.f), C.co2, +1); tag(`forward ${fmtR(r.f)} mM/s`, narrow ? ex + 4 : ex, narrow ? fy - 16 : fy);
   arrowBar(a0, a1, by, logW(r.b), C.hco3, -1); tag(`back ${fmtR(r.b)} mM/s`, narrow ? ex + 4 : ex, narrow ? by - 16 : by);
   const net = r.f - r.b, eq = Math.abs(net) < 1e-3 * Math.max(r.f, 1e-9);
-  const ny = narrow ? ey + 104 : ey + 84;
+  const ny = narrow ? ey + 136 : ey + 120;
   tag(eq ? (narrow ? "net: none (equilibrium)" : "net: none. Both directions run all the time, equally: equilibrium") : `net: ${net > 0 ? "forward" : "back"}, ${fmtR(Math.abs(net))} mM/s`, narrow ? ex + 4 : ex + ew * 0.32, ny, eq ? C.muted : C.acc, "600 13px system-ui");
-  if (!narrow) tag(step === 0 ? "arrow widths: rates, log scale" : "arrow widths: rates, log scale; carbonic anhydrase multiplies both alike", ex + ew * 0.32, ey + 104);
+  if (!narrow) tag(step === 0 ? "arrow widths: rates, log scale" : "arrow widths: rates, log scale; carbonic anhydrase multiplies both alike", ex + ew * 0.32, ey + 140);
   // the readouts
-  const pH = -Math.log10(freeH(s.acid) / 1e3), ry = narrow ? ey + 132 : 230;
+  const pH = -Math.log10(freeH(s.acid) / 1e3), ry = narrow ? ey + 162 : 262;
   const rows = [["CO₂", s.co2.toFixed(2) + " mM", C.co2], ["HCO₃⁻", s.hco3.toFixed(2) + " mM", C.hco3], ["pH", pH.toFixed(2), C.h], ["converted since the last change", (conv >= 0 ? "+" : "") + (Math.abs(conv) < 0.001 ? (conv * 1e6).toFixed(0) + " nM" : conv.toFixed(3) + " mM") + (conv >= 0 ? " forward" : " back"), C.muted], ["time", t.toFixed(1) + " s", C.muted]];
   if (!narrow) rows.forEach(([k, v, col], i) => { tag(k, ex + ew * 0.32, ry + i * 26, C.muted, "13px system-ui"); tag(v, ex + ew * 0.32 + 230, ry + i * 26, col, "600 15px ui-monospace, Menlo, monospace"); });
   else tag(`CO₂ ${s.co2.toFixed(2)} · HCO₃⁻ ${s.hco3.toFixed(1)} mM · pH ${pH.toFixed(2)} · ${t.toFixed(1)} s`, 14, ry, C.text, "13px system-ui");
 }
 // ---- the steps ----
 const STEPS = [
-  { name: "1 of 6: the reaction", buffer: false, text: `<p><b>CO₂ and water make carbonic acid's two halves, H⁺ and HCO₃⁻, and they make CO₂ again.</b> Both directions run all the time. At equilibrium they run equally fast, so nothing changes, though plenty is happening.</p>
+  { name: "1 of 6: the reaction", buffer: false, text: `<p><b>CO₂ and water make carbonic acid's two halves, H⁺ and HCO₃⁻, and they make CO₂ again.</b> Water is the solvent itself, 55 M, so it never runs short and is never drawn as dots: the box is water. Both directions run all the time. At equilibrium they run equally fast, so nothing changes, though plenty is happening.</p>
 <div class="predict"><b>Predict.</b> Add acid. Which way does the reaction run, and where does the H⁺ go? Then add CO₂. How much becomes HCO₃⁻?</div>
 <p><b>Which way it runs depends on the concentrations.</b> Add acid and it runs back: the H⁺ meets HCO₃⁻ and leaves as CO₂, so most of the acid disappears. That is bicarbonate acting as a buffer. Add HCO₃⁻ and it runs back too; add CO₂ and it runs forward.</p>
 <p><b>But adding CO₂ makes surprisingly little HCO₃⁻ here</b>: about 30 nM, while pH falls 0.26. The H⁺ it would make has nowhere to go, so a few nanomolar is enough to reach equilibrium, in well under a millisecond. That is the next step.</p>` },
