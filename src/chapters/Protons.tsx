@@ -2,7 +2,7 @@ import * as I from "../core/physics.ts";
 import * as P from "../core/protons.ts";
 import { $, Trace, fmtMv, gauges, loop, ruler, setText, viewPref } from "../views/draw.ts";
 import { ACID_ANGLE, Lab } from "../views/lab.ts";
-import { CaView, bufferLedger, overlay, phGauge } from "../views/protons-views.ts";
+import { CA_KEY, CaView, bufferLedger, overlay, phGauge } from "../views/protons-views.ts";
 import { Below, ModelNote, Readout, ViewPicker, useEngine, IonKey } from "./parts.tsx";
 import { Clock } from "./Rundown.tsx";
 
@@ -54,8 +54,8 @@ function engine() {
   $("both").onclick = () => { const on = !a().nhe.on && !a().nbc.on; a().nhe.on = on; a().nbc.on = on; changed(); };
   // a CO₂ step changes the bath and, at once, pHi (physics.ts, co2Step); a second press returns it
   const setCo2 = (to: Co2) => {
-    if (co2 !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 0.5, co2 === "held"); lab.n = r.n; lab.bath = r.bath; caView.burst(r.hydrated); }
-    if (to !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 2, to === "held"); lab.n = r.n; lab.bath = r.bath; caView.burst(r.hydrated); }
+    if (co2 !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 0.5, co2 === "held"); lab.n = r.n; lab.bath = r.bath; caView.burst(lab.stage, r.hydrated); }
+    if (to !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 2, to === "held"); lab.n = r.n; lab.bath = r.bath; caView.burst(lab.stage, r.hydrated); }
     co2 = to; lab.resnap(); changed();
   };
   $("co2").onclick = () => setCo2(co2 === "alone" ? "normal" : "alone");
@@ -76,10 +76,11 @@ function engine() {
     record();
     lab.draw(dt, ["Na", "K", "Cl"]); // the stage; this page draws its own ruler and gauges
     const s = lab.s, c = s.ci, pHo = lab.bath.pHo, Vmv = s.V * 1000, EH = s.acid.EH * 1000;
-    caView.step(dt, s.acid.ca, lab.running ? lab.o.speed : 0);
+    if (viewPref.view === "cell") caView.step(lab.stage, dt, s.acid.ca, lab.running ? lab.o.speed : 0, ANGLE.co2);
+    else caView.release(lab.stage);
     if (viewPref.view === "cell") {
       overlay(lab.stage, $<HTMLCanvasElement>("stage"), { leak: s.acid.leak, nhe: s.acid.nhe, nbc: s.acid.nbc, ref: restLeak, leakAngle: ANGLE.leak, nheAngle: ANGLE.nhe, nbcAngle: ANGLE.nbc });
-      caView.draw(lab.stage, $<HTMLCanvasElement>("stage"), ANGLE.co2, restLeak);
+      caView.draw(lab.stage, $<HTMLCanvasElement>("stage"), ANGLE.co2);
     }
     ruler($<HTMLCanvasElement>("ruler-ph"), { V: Vmv, E: { K: s.E.K * 1000, H: EH, HCO3: EH }, g: { K: 1, H: 0.3, HCO3: 0 }, min: -110, max: 40, height: 400 });
     const pass = P.passivePHi(Vmv, pHo);
@@ -110,7 +111,7 @@ export default function Protons() {
       <div className="grid hero">
         <div className="panel">
           <canvas id="stage" />
-          <IonKey ions={["Na", "K", "Cl", "A", "H", "HCO3", "CO2"]} />
+          <IonKey ions={["Na", "K", "Cl", "A", "H", "HCO3", "CO2"]} extras={[CA_KEY]} />
           <ViewPicker ions={["H", "HCO3", "Na", "K", "Cl"]} />
           <div className="controls">
             <button id="nhe">Stop NHE</button>

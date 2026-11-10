@@ -119,18 +119,40 @@ export function glyph(ctx: CanvasRenderingContext2D, ion: Species, x: number, y:
 }
 
 /** A key of glyphs, drawn into a canvas. */
-export function drawKey(canvas: HTMLCanvasElement, ions: Species[], height = 34) {
-  const { ctx, w } = fit(canvas, height);
+/** Something other than an ion in a key: a small drawing and its text, with an optional note in a quieter line. */
+export interface KeyExtra { draw: (ctx: CanvasRenderingContext2D, x: number, y: number) => void; text: string; note?: string }
+/** A key of glyphs, drawn into a canvas, wrapping on a narrow screen; extras (an enzyme, say) on rows of their own. */
+export function drawKey(canvas: HTMLCanvasElement, ions: Species[], extras: KeyExtra[] = []) {
+  const w = Math.max(50, canvas.clientWidth), m = canvas.getContext("2d")!;
+  m.font = "13px system-ui, sans-serif";
+  const steps = ions.map((ion) => 26 + m.measureText(LABEL[ion]).width + 12);
+  let rows = 1, xx = 12;
+  for (const st of steps) { if (xx + st > w && xx > 12) { xx = 12; rows++; } xx += st; }
+  const lines = (t: string, font: string) => { m.font = font; return m.measureText(t).width > w - 40 ? 2 : 1; };
+  const extraRows = extras.reduce((n, e) => n + lines(e.text, "13px system-ui, sans-serif") + (e.note ? lines(e.note, "12px system-ui, sans-serif") : 0), 0);
+  const { ctx } = fit(canvas, 8 + (rows + extraRows) * 21);
   let x = 12, y = 15;
-  ctx.font = "13px system-ui, sans-serif";
-  ctx.textBaseline = "middle";
-  for (const ion of ions) {
-    const step = 26 + ctx.measureText(LABEL[ion]).width + 12;
-    if (x + step > w && x > 12) { x = 12; y += 22; } // a second row on a narrow screen
+  ctx.font = "13px system-ui, sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+  ions.forEach((ion, i) => {
+    if (x + steps[i] > w && x > 12) { x = 12; y += 21; } // a second row on a narrow screen
     glyph(ctx, ion, x + 7, y, 6.5);
     ctx.fillStyle = cssVar("--text");
     ctx.fillText(LABEL[ion], x + 19, y);
-    x += step;
+    x += steps[i];
+  });
+  // a line that does not fit takes two
+  const say = (t: string, font: string, col: string) => {
+    ctx.font = font; ctx.fillStyle = col;
+    if (ctx.measureText(t).width <= w - 40) { ctx.fillText(t, 34, y); return; }
+    // after a colon if there is one (so an equation stays whole), else at the word nearest the middle
+    const c = t.indexOf(": "), words = t.split(" "), half = Math.ceil(words.length / 2);
+    const [a1, a2] = c > 0 ? [t.slice(0, c + 1), t.slice(c + 2)] : [words.slice(0, half).join(" "), words.slice(half).join(" ")];
+    ctx.fillText(a1, 34, y); y += 21; ctx.fillText(a2, 34, y);
+  };
+  for (const e of extras) {
+    y += 21; e.draw(ctx, 19, y);
+    say(e.text, "13px system-ui, sans-serif", cssVar("--text"));
+    if (e.note) { y += 21; say(e.note, "12px system-ui, sans-serif", cssVar("--muted")); }
   }
 }
 
@@ -508,6 +530,8 @@ export interface Pathway {
   phase?: number;
 }
 type Where = "in" | "out";
+/** A stage dot held by a reaction drawn on the stage; it is drawn by whoever holds it. */
+export interface Held { x: number; y: number; a: number }
 interface Particle { ion: Species; where: Where; x: number; y: number; vx: number; vy: number; a: number; dying: boolean; busy: boolean; crossed?: number; away?: boolean }
 interface Leg { ions: Species[]; from: Where }
 interface Bound { q: Particle; slot: number; x0: number; y0: number; walk: number; start: number }
@@ -571,6 +595,26 @@ export class CellStage {
   /** "amounts" mode: the cell's ions of each species (not moles). */
   setAmounts(ions: Partial<Record<Species, number>>) { this.amounts = ions; }
   setPathways(list: Pathway[]) { this.pathways = list; }
+  /**
+   * For a reaction drawn on the stage (carbonic anhydrase): take the free dot of this ion nearest (x, y) on one side, and
+   * hold it (it stops wandering) until let go. Returns null if there is none.
+   */
+  takeDot(ion: Species, where: Where, x: number, y: number): Held | null {
+    let best: Particle | null = null, bd = Infinity;
+    for (const q of this.parts) {
+      if (q.ion !== ion || q.where !== where || q.busy || q.dying) continue;
+      const d = Math.hypot(q.x - x, q.y - y);
+      if (d < bd) { bd = d; best = q; }
+    }
+    if (best) best.busy = true;
+    return best;
+  }
+  /** Let a held dot go: consumed (it fades out where it is), or free again. */
+  letGo(q: Held, consumed: boolean) { const p = q as Particle; p.busy = false; if (consumed) p.dying = true; }
+  /** A dot a reaction makes, at (x, y), moving off at (vx, vy). */
+  addDot(ion: Species, where: Where, x: number, y: number, vx = 0, vy = 0) {
+    this.parts.push({ ion, where, x, y, vx, vy, a: 0.2, dying: false, busy: false });
+  }
   setV(mv: number | null) { this.V = mv; }
 
   private target(ion: Species, where: Where, g: ReturnType<CellStage["geometry"]>) {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, 2026-11-10. Tony: *"ions occlude the text. advise. also advise on animating carbonic anhdrase activity"*. Given
+Accepted, 2026-11-10; the scale of CA's conversions superseded by [ADR-0026](0026-carbonic-anhydrase-on-the-dots-scale-its-equation-in-the-legend.md). Tony: *"ions occlude the text. advise. also advise on animating carbonic anhdrase activity"*. Given
 both pieces of advice, he answered *"both"*. The forms are Claude's.
 
 ## Decision

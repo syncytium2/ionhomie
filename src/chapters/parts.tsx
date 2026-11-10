@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LABEL, drawKey, setStageView, viewPref, type Species, type StageView } from "../views/draw.ts";
+import { LABEL, drawKey, setStageView, viewPref, type KeyExtra, type Species, type StageView } from "../views/draw.ts";
 
 /**
  * Start a chapter's imperative engine after mount and stop it on unmount. The engine draws into
@@ -67,13 +67,13 @@ export function ModelNote() {
 }
 
 /** The ion legend under a stage: each ion's glyph and name, only those this page draws (Tony: "a legend for the ions"). */
-export function IonKey({ ions }: { ions: Species[] }) {
+export function IonKey({ ions, extras = [] }: { ions: Species[]; extras?: KeyExtra[] }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    const draw = () => { if (ref.current) drawKey(ref.current, ions, ref.current.clientWidth < 440 ? 52 : 30); };
+    const draw = () => { if (ref.current) drawKey(ref.current, ions, extras); };
     draw();
     addEventListener("resize", draw);
     return () => removeEventListener("resize", draw);
   }, [ions.join()]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <canvas ref={ref} className="ionkey" aria-label={"Key: " + ions.map((i) => LABEL[i]).join(", ")} />;
+  return <canvas ref={ref} className="ionkey" aria-label={"Key: " + [...ions.map((i) => LABEL[i]), ...extras.map((e) => e.text)].join(", ")} />;
 }

@@ -2,7 +2,8 @@
 // what the stage overlays in its cell view (flux arrows sized by rate, CO₂ crossing, carbonic anhydrase).
 // They draw what core/protons.ts computes and nothing else.
 
-import { cssVar, color, fit, glyph, type CellStage } from "./draw.ts";
+import { cssVar, color, fit, glyph, type CellStage, type Held, type KeyExtra } from "./draw.ts";
+import { STAGE } from "./stage-style.ts";
 
 const mono = "12px ui-monospace, Menlo, monospace";
 
@@ -104,82 +105,115 @@ export function overlay(stage: CellStage, canvas: HTMLCanvasElement, o: Overlay)
   ctx.restore();
 }
 
-/** Ions per conversion CaView shows: its own stated scale (docs/adr/0011), like the membrane rim's. */
-export const CA_IONS_PER_EVENT = 1e9;
-interface Conversion { forward: boolean; t: number; dur: number; seed: number }
+/** The enzyme's shape, shared by the stage and the legend: a gray body with its zinc at the active site. */
+export function drawEnzyme(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, wobble = 0) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(wobble * 0.12);
+  ctx.fillStyle = "#8e9aaf"; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.82, 0, 0, 2 * Math.PI); ctx.fill();
+  ctx.fillStyle = "#cfd8e6"; ctx.beginPath(); ctx.arc(0, 0, Math.max(1.6, r * 0.24), 0, 2 * Math.PI); ctx.fill(); // Zn²⁺
+  ctx.restore();
+}
+/** Carbonic anhydrase in the legend, with its equation (Tony: "add CA to the legend and put the equation there"). */
+export const CA_KEY: KeyExtra = {
+  draw: (ctx, x, y) => drawEnzyme(ctx, x, y, 7),
+  text: "carbonic anhydrase (CA II): CO₂ + H₂O ⇌ H⁺ + HCO₃⁻",
+  note: "about a million turnovers a second each way; the cell shows only the net, on the dots' scale",
+};
+
+interface Conversion { forward: boolean; t: number; dot: Held | null; x0: number; y0: number; h: number }
 
 /**
- * Carbonic anhydrase, CO₂ + H₂O ⇌ H⁺ + HCO₃⁻, in the cytoplasm (CA II). The enzyme turns over about a million times a
- * second each way, so it flickers all the time; nearly all of that cancels. What is drawn is the model's net
- * (physics.ts, acid.ca), at its own stated scale: forward, a CO₂ crosses the lipid, reaches the enzyme, and leaves as an H⁺
- * and an HCO₃⁻; back, an H⁺ and an HCO₃⁻ meet at the enzyme and a CO₂ leaves across the lipid. The net CO₂ crossing is
- * exactly CA's net, since CO₂ inside is held equal to the bath's. A CO₂ step adds its whole hydration at once, as a burst.
+ * Carbonic anhydrase, CO₂ + H₂O ⇌ H⁺ + HCO₃⁻, in the cytoplasm (CA II). It flickers all the time for its turnover each way,
+ * nearly all of which cancels; what moves is the model's net (physics.ts, acid.ca), on the stage's own scale and thinned
+ * like every crossing, so the HCO₃⁻ it uses or makes are the cell's own dots. Back (as at rest): an HCO₃⁻ dot walks to the
+ * enzyme, meets an H⁺ from the buffers, and leaves as CO₂ across the lipid. Forward: a CO₂ crosses in, and leaves the enzyme
+ * as an HCO₃⁻ dot and an H⁺ that the buffers take at once. A CO₂ step's hydration plays as one burst.
  */
 export class CaView {
   private events: Conversion[] = [];
   private acc = 0;
   private clock = 0;
-  private net = 0; // mol/s
-  private burstUntil = -1; private burstForward = true;
-  /** Advance by dt real seconds, at the model's net rate (mol/s) and the clock's speed (0 when paused). */
-  step(dt: number, caNet: number, speed: number) {
-    this.clock += dt; this.net = caNet;
-    this.acc += (Math.abs(caNet) * 6.02214076e23 * speed * dt) / CA_IONS_PER_EVENT;
-    while (this.acc >= 1 && this.events.length < 24) { this.acc -= 1; this.events.push({ forward: caNet > 0, t: 0, dur: 2.2, seed: Math.random() }); }
-    if (this.acc > 3) this.acc = 3;
-    for (const e of this.events) e.t += dt / e.dur;
+  private burstUntil = -1; private burstText = "";
+  /** Advance by dt real seconds: net rate (mol/s), clock speed (0 when paused), ions per dot and the stage's thinning. */
+  step(stage: CellStage, dt: number, caNet: number, speed: number, co2Angle: number) {
+    this.clock += dt;
+    const g = stage.geometry(), ex = g.cx - g.R * 0.05, ey = g.cy + g.R * 0.3;
+    this.acc += (Math.abs(caNet) * NA * speed * dt) / stage.ionsPerDot() / Math.max(1, stage.thinning);
+    while (this.acc >= 1 && this.events.length < 12) { this.acc -= 1; this.start(stage, caNet > 0, ex, ey); }
+    if (this.acc > 2) this.acc = 2;
+    for (const e of this.events) this.advance(stage, e, dt, ex, ey, co2Angle);
     this.events = this.events.filter((e) => e.t < 1);
   }
-  /** What a CO₂ step hydrates at once (mol; negative runs it back), shown as a burst at this view's scale. */
-  burst(mol: number) {
-    const n = Math.min(24, Math.round((Math.abs(mol) * 6.02214076e23) / CA_IONS_PER_EVENT));
-    for (let i = 0; i < n; i++) this.events.push({ forward: mol > 0, t: -i * 0.12, dur: 2.2, seed: Math.random() });
-    this.burstUntil = this.clock + 3.5; this.burstForward = mol > 0;
+  /** Let go of any dots held mid-conversion (the stage is showing another view). */
+  release(stage: CellStage) {
+    for (const e of this.events) if (e.dot) { stage.letGo(e.dot, false); e.dot = null; }
+    this.events = [];
   }
-  draw(stage: CellStage, canvas: HTMLCanvasElement, co2Angle: number, ref: number) {
-    const g = stage.geometry(), ctx = canvas.getContext("2d")!, narrow = g.w < 560;
+  /** What a CO₂ step hydrates at once (mol; negative runs it back): its dots, unthinned, as a burst. */
+  burst(stage: CellStage, mol: number) {
+    const g = stage.geometry(), ex = g.cx - g.R * 0.05, ey = g.cy + g.R * 0.3;
+    const dots = (Math.abs(mol) * NA) / stage.ionsPerDot(), n = Math.min(12, Math.round(dots));
+    for (let i = 0; i < n; i++) { this.start(stage, mol > 0, ex, ey); this.events[this.events.length - 1].t = -i * 0.25; }
+    this.burstUntil = this.clock + 4;
+    const b = (Math.abs(mol) * NA) / 1e9;
+    this.burstText = `${mol > 0 ? "CO₂ step" : "CO₂ returned"}: ${b.toFixed(1)} billion HCO₃⁻ ${mol > 0 ? "made" : "used"} at once (${dots < 1.5 ? "about one dot" : `${Math.round(dots)} dots`})`;
+  }
+  private start(stage: CellStage, forward: boolean, ex: number, ey: number) {
+    // back: it needs an HCO₃⁻ dot to use; if none is free, the event waits for one
+    const dot = forward ? null : stage.takeDot("HCO3", "in", ex, ey);
+    if (!forward && !dot) return;
+    this.events.push({ forward, t: 0, dot, x0: dot ? dot.x : 0, y0: dot ? dot.y : 0, h: 0 });
+  }
+  private advance(stage: CellStage, e: Conversion, dt: number, ex: number, ey: number, co2Angle: number) {
+    e.t += dt / 2.6;
+    if (e.t < 0) return;
+    if (!e.forward && e.dot) {
+      if (e.t < 0.35) { const u = ease(e.t / 0.35); e.dot.x = e.x0 + (ex - e.x0) * u; e.dot.y = e.y0 + (ey - e.y0) * u; }
+      else if (e.h === 0) { e.h = 1; stage.letGo(e.dot, true); e.dot = null; } // used: it becomes CO₂ (and water)
+    }
+    if (e.forward && e.t >= 0.6 && e.h === 0) {
+      e.h = 1; // made: a new HCO₃⁻ dot leaves the enzyme
+      const a = Math.random() * 2 * Math.PI;
+      stage.addDot("HCO3", "in", ex + Math.cos(a) * 8, ey + Math.sin(a) * 8, Math.cos(a) * 30, Math.sin(a) * 30);
+    }
+    void co2Angle;
+  }
+  draw(stage: CellStage, canvas: HTMLCanvasElement, co2Angle: number) {
+    const g = stage.geometry(), ctx = canvas.getContext("2d")!;
     ctx.save();
     const ex = g.cx - g.R * 0.05, ey = g.cy + g.R * 0.3, r = 11 * g.k;
     const out: [number, number] = [g.cx + Math.cos(co2Angle) * (g.R + 34 * g.k), g.cy + Math.sin(co2Angle) * (g.R + 34 * g.k)];
     const mem: [number, number] = [g.cx + Math.cos(co2Angle) * (g.R - 18 * g.k), g.cy + Math.sin(co2Angle) * (g.R - 18 * g.k)];
-    const ease = (u: number) => u * u * (3 - 2 * u);
     const lerp = (a: [number, number], b: [number, number], u: number): [number, number] => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
-    // the conversions: CO₂ along out → membrane → enzyme, H⁺ and HCO₃⁻ on either side of the enzyme
+    const co2At = (u: number) => (u < 0.5 ? lerp(out, mem, ease(u / 0.5)) : lerp(mem, [ex, ey], ease((u - 0.5) / 0.5)));
     for (const e of this.events) {
       if (e.t < 0) continue;
-      const u = e.forward ? e.t : 1 - e.t; // forward runs the path one way, back the other
-      const spread = 26 * g.k, side = (e.seed - 0.5) * 0.8;
-      const hAt: [number, number] = [ex - spread, ey + spread * (0.6 + side)], bAt: [number, number] = [ex + spread, ey + spread * (0.6 - side)];
-      if (u < 0.55) { // the CO₂ leg
-        const v = u / 0.55, [x, y] = v < 0.5 ? lerp(out, mem, ease(v / 0.5)) : lerp(mem, [ex, ey], ease((v - 0.5) / 0.5));
-        glyph(ctx, "CO2", x, y, 4.5, Math.min(1, e.forward ? e.t * 6 : (1 - e.t) * 6));
-      } else { // the H⁺ and HCO₃⁻ leg
-        const v = ease((u - 0.55) / 0.45), a = e.forward ? Math.min(1, (1 - e.t) * 5) : Math.min(1, e.t * 5);
-        const [hx, hy] = lerp([ex, ey], hAt, v), [bx, by] = lerp([ex, ey], bAt, v);
-        glyph(ctx, "H", hx, hy, 4.2, a); glyph(ctx, "HCO3", bx, by, 4.2, a);
+      if (e.dot) glyph(ctx, "HCO3", e.dot.x, e.dot.y, STAGE.crossR + 0.6, 1); // the HCO₃⁻ on its way to be used
+      if (!e.forward) {
+        // an H⁺ from the buffers meets it at the enzyme, then a CO₂ leaves across the lipid
+        if (e.t > 0.2 && e.t < 0.42) glyph(ctx, "H", ex - 10, ey - 6, 3.6, Math.sin(((e.t - 0.2) / 0.22) * Math.PI));
+        if (e.t >= 0.4) { const [x, y] = co2At(1 - (e.t - 0.4) / 0.6); glyph(ctx, "CO2", x, y, 4.5, Math.min(1, (1 - e.t) * 6)); }
+      } else {
+        // a CO₂ crosses in to the enzyme; it leaves as HCO₃⁻ (a dot of the cell's) and an H⁺ the buffers take at once
+        if (e.t < 0.6) { const [x, y] = co2At(e.t / 0.6); glyph(ctx, "CO2", x, y, 4.5, Math.min(1, e.t * 8)); }
+        else if (e.t < 0.85) glyph(ctx, "H", ex - 12, ey + 4, 3.6, Math.sin(((e.t - 0.6) / 0.25) * Math.PI));
       }
     }
-    // the enzyme: a gray body with its zinc at the active site, flickering with its turnover both ways
+    // the enzyme, flickering with its turnover both ways
     const f = Math.sin(this.clock * 31) * 0.5 + Math.sin(this.clock * 47) * 0.5;
-    ctx.save(); ctx.translate(ex, ey); ctx.rotate(f * 0.12);
-    ctx.fillStyle = "rgba(142,154,175,0.18)"; ctx.beginPath(); ctx.arc(0, 0, r * (1.45 + 0.12 * f), 0, 2 * Math.PI); ctx.fill();
-    ctx.fillStyle = "#8e9aaf"; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.82, 0, 0, 2 * Math.PI); ctx.fill();
-    ctx.fillStyle = "#cfd8e6"; ctx.beginPath(); ctx.arc(0, 0, 2.6, 0, 2 * Math.PI); ctx.fill(); // Zn²⁺
-    ctx.restore();
-    // its label, the reaction with the net way lit, and this view's scale
+    ctx.fillStyle = "rgba(142,154,175,0.18)"; ctx.beginPath(); ctx.arc(ex, ey, r * (1.45 + 0.12 * f), 0, 2 * Math.PI); ctx.fill();
+    drawEnzyme(ctx, ex, ey, r, f);
     const tag = (t: string, x: number, y: number, col: string, font = "11px system-ui, sans-serif") => {
       ctx.font = font; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const tw = ctx.measureText(t).width; x = Math.max(tw / 2 + 6, Math.min(g.w - tw / 2 - 6, x)); y = Math.max(12, Math.min(g.h - 12, y));
       ctx.fillStyle = "rgba(13,17,23,0.82)"; ctx.fillRect(x - tw / 2 - 5, y - 9, tw + 10, 18);
       ctx.fillStyle = col; ctx.fillText(t, x, y);
     };
-    const fwd = this.net > 0, strong = Math.abs(this.net) > ref * 0.02;
-    tag(!strong ? "CA: CO₂ + H₂O ⇌ H⁺ + HCO₃⁻" : fwd ? "CA: CO₂ + H₂O → H⁺ + HCO₃⁻ (net)" : "CA: CO₂ + H₂O ← H⁺ + HCO₃⁻ (net)", ex, ey + r + 16, cssVar("--text"), "12px system-ui, sans-serif");
-    // a CO₂ step's burst runs one way while the net, after it, may already run the other: say so while it plays
-    if (this.clock < this.burstUntil) tag(this.burstForward ? "CO₂ step: a burst of hydration at once" : "CO₂ returned: a burst back to CO₂ at once", ex, ey - r - 16, color("CO2"), "600 12px system-ui, sans-serif");
-    if (!narrow) tag(`~10⁶ turnovers/s each way per enzyme; each conversion shown ≈ ${CA_IONS_PER_EVENT / 1e9} billion, net`, ex, ey + r + 34, cssVar("--muted"));
+    tag("CA", ex, ey + r + 13, cssVar("--text"), "600 12px system-ui, sans-serif");
+    if (this.clock < this.burstUntil) tag(this.burstText, ex, ey - r - 16, color("CO2"), "600 12px system-ui, sans-serif");
     const [tx, ty] = [g.cx + Math.cos(co2Angle) * (g.R + 56 * g.k), g.cy + Math.sin(co2Angle) * (g.R + 56 * g.k)];
-    tag(narrow ? "CO₂: net shown" : "CO₂ crosses the lipid; its net is shown", tx, ty, cssVar("--muted"));
+    tag("CO₂: net shown", tx, ty, cssVar("--muted"));
     ctx.restore();
   }
 }
+const NA = 6.02214076e23;
+const ease = (u: number) => u * u * (3 - 2 * u);
