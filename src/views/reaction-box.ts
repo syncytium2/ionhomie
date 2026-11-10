@@ -1,13 +1,14 @@
 // reaction-box.ts — the step-through's sealed box of solution (docs/adr/0027): CO₂ + H₂O ⇌ H⁺ + HCO₃⁻ with no cell.
-// It draws what core/reaction.ts computes. The dynamic equilibrium is shown three ways: conversions both ways at the
-// arrows' rates (thinned alike when too fast, and the box says so), a running total for each direction beside the net,
-// and one carbon followed.
+// It draws what core/reaction.ts computes. Beside the box, a seesaw shows which way the reaction runs (it tips by
+// log₁₀ of forward ÷ backward, which is K·[CO₂]/([H⁺][HCO₃⁻]), level at equilibrium) and two dials show how fast each
+// direction runs (high and equal at equilibrium: nothing changes, plenty happens). In the box, conversions both ways at
+// those rates (thinned alike when too fast, and the box says so), and one carbon followed. The numbers go in a table
+// the page keeps folded (Tony: "better displayed as the teeter totter, or dials. expanding it reveals the table").
 
 import * as R from "../core/reaction.ts";
 import { cssVar, glyph } from "./draw.ts";
 
 const PER_DOT = 0.25; // mM per ring or triangle, CO₂ and HCO₃⁻ alike: one stated scale
-const H = 440;
 type Kind = "CO2" | "HCO3" | "A";
 interface Dot { k: Kind; x: number; y: number; vx: number; vy: number; busy?: boolean; tag?: boolean }
 interface Ev { d: Dot; fwd: boolean; t: number; hx: number; hy: number; swapped?: boolean }
@@ -17,7 +18,6 @@ function fmtR(r: number) {
   const [m, e] = r.toExponential(1).split("e");
   return `${m}×10${e.replace("-", "⁻").replace(/\d/g, (d) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[+d])}`;
 }
-const logW = (r: number) => 1 + 10 * Math.max(0, (Math.log10(Math.max(r, 1e-7)) + 7) / 9); // 1e-7 … 100 mM/s
 
 export class ReactionBox {
   box: R.Box;
@@ -26,6 +26,7 @@ export class ReactionBox {
   conv = 0; // net converted forward since the last change, mM
   fwdTot = 0; backTot = 0; // each direction's running total, mM: both climb at equilibrium
   thin = 1;
+  private tilt = 0; // the seesaw's shown tilt, in decades of forward ÷ backward, eased so a blip is visible
   private dots: Dot[] = [];
   private events: Ev[] = [];
   private flashes: { x: number; y: number; k: Kind; life: number }[] = [];
@@ -36,6 +37,8 @@ export class ReactionBox {
     this.ctx = canvas.getContext("2d")!;
     this.box = R.rest(buffered);
   }
+  /** The followed carbon's share of time as HCO₃⁻ so far, or null before a second has passed. */
+  followed() { return this.tagTime > 1 ? this.tagAsHCO3 / this.tagTime : null; }
   /** Start the counts over (after the learner changes something). */
   tally() { this.conv = 0; this.fwdTot = 0; this.backTot = 0; this.tagAsHCO3 = 0; this.tagTime = 0; }
   reset() { this.box = R.rest(this.box.buffered); this.t = 0; this.dots = []; this.events = []; this.tally(); }
@@ -101,7 +104,7 @@ export class ReactionBox {
   }
 
   private draw(dt: number, r: { f: number; b: number }) {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.max(50, this.canvas.clientWidth);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.max(50, this.canvas.clientWidth), H = w < 640 ? 540 : 440;
     if (this.canvas.width !== Math.round(w * dpr) || this.canvas.height !== Math.round(H * dpr)) { this.canvas.width = Math.round(w * dpr); this.canvas.height = Math.round(H * dpr); this.canvas.style.height = H + "px"; }
     const c = this.ctx; c.setTransform(dpr, 0, 0, dpr, 0, 0);
     const narrow = w < 640, muted = cssVar("--muted"), text = cssVar("--text"), acc = cssVar("--accent"), line = cssVar("--line");
@@ -161,35 +164,44 @@ export class ReactionBox {
       } else if (sy) glyph(c, sy, cx, gy, 6);
       tx += widths[i];
     });
-    // both directions as arrows, widths by rate, and the net beneath
-    const arrow = (x0: number, x1: number, y: number, lw: number, col: string, dir: 1 | -1) => {
-      c.strokeStyle = col; c.fillStyle = col; c.lineWidth = lw; c.lineCap = "round";
-      const tip = dir > 0 ? x1 : x0, tail = dir > 0 ? x0 : x1, hl = 8 + lw;
-      c.beginPath(); c.moveTo(tail, y); c.lineTo(tip - dir * hl * 0.7, y); c.stroke();
-      c.beginPath(); c.moveTo(tip, y); c.lineTo(tip - dir * hl, y - hl * 0.6); c.lineTo(tip - dir * hl, y + hl * 0.6); c.fill();
+    // the seesaw: which way it runs. The side converting faster is the heavier side, and tips down.
+    const ratio = r.b > 0 ? r.f / r.b : 1, target = Math.max(-2, Math.min(2, Math.log10(ratio)));
+    this.tilt += (target - this.tilt) * (1 - Math.exp(-dt / 0.12));
+    const sx = ex + ew / 2, sy = narrow ? 318 : 168, L = narrow ? ew * 0.3 : Math.min(ew * 0.38, 190), sw = narrow ? 92 : 104, ang = -0.13 * this.tilt;
+    c.fillStyle = "#3a4558"; c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx - 16, sy + 28); c.lineTo(sx + 16, sy + 28); c.closePath(); c.fill(); // the fulcrum
+    const end = (k: number) => ({ x: sx + k * L * Math.cos(ang), y: sy + k * L * Math.sin(ang) });
+    c.strokeStyle = "#c9ced6"; c.lineWidth = 5; c.lineCap = "round"; c.beginPath(); const e0 = end(-1), e1 = end(1); c.moveTo(e0.x, e0.y); c.lineTo(e1.x, e1.y); c.stroke();
+    const seat = (p: { x: number; y: number }, txt: string, ions: ("CO2" | "H" | "HCO3")[]) => {
+      c.fillStyle = "#26303f"; c.strokeStyle = line; c.lineWidth = 1.5; c.beginPath(); c.roundRect(p.x - sw / 2, p.y - 40, sw, 34, 8); c.fill(); c.stroke();
+      c.font = `600 ${narrow ? 13 : 15}px system-ui, sans-serif`; c.fillStyle = text; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(txt, p.x, p.y - 23 - 9);
+      ions.forEach((ion, k) => glyph(c, ion, p.x - (ions.length - 1) * 9 + k * 18, p.y - 14, 4.5));
     };
-    const a0 = narrow ? ex + 4 : ex + ew * 0.32, a1 = narrow ? ex + ew - 4 : ex + ew * 0.92;
-    const fy = narrow ? ey + 74 : ey + 70, by = narrow ? ey + 112 : ey + 94;
-    arrow(a0, a1, fy, logW(r.f), cssVar("--co2"), 1); tag(`forward ${fmtR(r.f)} mM/s`, narrow ? ex + 4 : ex, narrow ? fy - 16 : fy);
-    arrow(a0, a1, by, logW(r.b), cssVar("--hco3"), -1); tag(`back ${fmtR(r.b)} mM/s`, narrow ? ex + 4 : ex, narrow ? by - 16 : by);
-    const net = r.f - r.b, eq = Math.abs(net) < 1e-3 * Math.max(r.f, 1e-9), ny = narrow ? ey + 136 : ey + 120;
-    tag(eq ? (narrow ? "net: none (equilibrium)" : "net: none. Both directions run all the time, equally: equilibrium") : `net: ${net > 0 ? "forward" : "back"}, ${fmtR(Math.abs(net))} mM/s`,
-      narrow ? ex + 4 : ex + ew * 0.32, ny, eq ? muted : acc, "600 13px system-ui, sans-serif");
-    if (!narrow) tag(this.showCaNote ? "arrow widths: rates, log scale; carbonic anhydrase multiplies both alike" : "arrow widths: rates, log scale", ex + ew * 0.32, ey + 140);
-    // the readouts
-    const pH = R.pH(this.box), ry = narrow ? ey + 162 : 262, conv = this.conv;
-    const netTxt = (conv >= 0 ? "+" : "") + (Math.abs(conv) < 0.001 ? (conv * 1e6).toFixed(0) + " nM" : conv.toFixed(3) + " mM");
-    if (!narrow) {
-      const rows: [string, string, string][] = [
-        ["CO₂", this.box.co2.toFixed(2) + " mM", cssVar("--co2")], ["HCO₃⁻", this.box.hco3.toFixed(2) + " mM", cssVar("--hco3")], ["pH", pH.toFixed(2), cssVar("--h")],
-        ["CO₂ → HCO₃⁻, so far", this.fwdTot.toFixed(1) + " mM", cssVar("--co2")], ["HCO₃⁻ → CO₂, so far", this.backTot.toFixed(1) + " mM", cssVar("--hco3")],
-        ["net, so far", netTxt, acc], ["the followed carbon, time as HCO₃⁻", this.tagTime > 1 ? Math.round((100 * this.tagAsHCO3) / this.tagTime) + "%" : "—", "#ffffff"],
-        ["time", this.t.toFixed(1) + " s", muted],
-      ];
-      rows.forEach(([k, v, col], i) => { tag(k, ex + ew * 0.32, ry + i * 22, muted, "13px system-ui, sans-serif"); tag(v, ex + ew * 0.32 + 230, ry + i * 22, col, "600 14px ui-monospace, Menlo, monospace"); });
-    } else {
-      tag(`CO₂ ${this.box.co2.toFixed(2)} · HCO₃⁻ ${this.box.hco3.toFixed(1)} mM · pH ${pH.toFixed(2)} · ${this.t.toFixed(1)} s`, 14, ry, text, "13px system-ui, sans-serif");
-      tag(`so far → ${this.fwdTot.toFixed(1)} mM, ← ${this.backTot.toFixed(1)} mM, net ${netTxt}`, 14, ry + 20, acc, "13px system-ui, sans-serif");
-    }
+    seat(e0, "CO₂ + H₂O", ["CO2"]); seat(e1, "H⁺ + HCO₃⁻", ["H", "HCO3"]);
+    const level = Math.abs(target) < 0.01;
+    const center = (txt: string, x: number, y: number, col: string, font: string) => { c.font = font; c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = col; c.fillText(txt, x, y); };
+    center(level ? "level: equilibrium" : target > 0 ? "tipped: CO₂ converts faster, net forward" : "tipped: HCO₃⁻ converts faster, net backward",
+      sx, sy + 44, level ? muted : acc, "600 13px system-ui, sans-serif");
+    // the dials: how fast each direction runs, log scale from 10⁻⁶ to 10⁴ mM/s
+    const dr = narrow ? 46 : Math.min(62, ew * 0.16), dy = narrow ? 452 : 352;
+    const dial = (x: number, title: string, rate: number, col: string) => {
+      const frac = (v: number) => Math.max(0, Math.min(1, (Math.log10(Math.max(v, 1e-9)) + 6) / 10));
+      c.strokeStyle = line; c.lineWidth = 8; c.lineCap = "butt"; c.beginPath(); c.arc(x, dy, dr, Math.PI, 2 * Math.PI); c.stroke();
+      c.strokeStyle = col; c.globalAlpha = 0.45; c.beginPath(); c.arc(x, dy, dr, Math.PI, Math.PI + Math.PI * frac(rate)); c.stroke(); c.globalAlpha = 1;
+      c.font = "10px system-ui, sans-serif"; c.fillStyle = muted; c.textAlign = "center"; c.textBaseline = "middle";
+      for (const [v, lab] of [[1e-6, "10⁻⁶"], [1e-2, "0.01"], [1e2, "100"], [1e4, "10⁴"]] as [number, string][]) {
+        const a = Math.PI + Math.PI * frac(v); c.fillText(lab, x + (dr + 14) * Math.cos(a), dy + (dr + 14) * Math.sin(a));
+      }
+      const a = Math.PI + Math.PI * frac(rate);
+      c.strokeStyle = col; c.lineWidth = 3; c.lineCap = "round"; c.beginPath(); c.moveTo(x, dy); c.lineTo(x + (dr - 6) * Math.cos(a), dy + (dr - 6) * Math.sin(a)); c.stroke();
+      c.fillStyle = col; c.beginPath(); c.arc(x, dy, 4, 0, 2 * Math.PI); c.fill();
+      c.font = `600 ${narrow ? 13 : 14}px system-ui, sans-serif`; c.fillStyle = text; c.fillText(title, x, dy - dr - 24);
+      c.font = "600 13px ui-monospace, Menlo, monospace"; c.fillStyle = col; c.fillText(`${fmtR(rate)} mM/s`, x, dy + 18);
+    };
+    dial(ex + ew * 0.27, "CO₂ → HCO₃⁻", r.f, cssVar("--co2"));
+    dial(ex + ew * 0.73, "HCO₃⁻ → CO₂", r.b, cssVar("--hco3"));
+    center(level ? (narrow ? "equally fast: nothing changes, plenty happens" : "both directions running, equally fast: nothing changes, plenty happens") : "the gap between the dials is the net",
+      sx, dy + 42, muted, `${narrow ? 12 : 13}px system-ui, sans-serif`);
+    if (!narrow) tag(this.showCaNote ? "seesaw: forward ÷ backward; dials: each direction's rate (log scales). The enzyme turns both dials up alike." : "seesaw: forward ÷ backward; dials: each direction's rate (log scales)",
+      ex + ew * 0.06, H - 12, muted, "12px system-ui, sans-serif");
   }
 }

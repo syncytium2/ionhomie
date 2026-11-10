@@ -137,39 +137,40 @@ function WholeCell({ bar }: { bar: ReactNode }) {
             <label>Vm <input type="range" id="vm" min="-90" max="-30" step="1" /><output id="vm-o">−60 mV</output></label>
           </div>
           <div className="controls"><Clock speeds={[300, 1800]} initial={1800} /></div>
-        </div>
-        <div className="panel"><h3>Voltage ruler</h3><canvas id="ruler-ph" /></div>
-      </div>
-      <div className="grid">
-        <div className="panel">
-          <h3 className="keepcase">pHi over time</h3><canvas id="trace-ph" />
-          <h3>Buffer ledger</h3><canvas id="buffer" />
+          <OnThisPage />
         </div>
         <div className="stack">
-          <div className="panel">
-            <div className="readouts">
-              <Readout id="r-ph" k="pHi" cls="ion-h" />
-              <Readout id="r-pass" k="passive pHi (E_H = Vm)" />
-              <Readout id="r-eh" k="E_H = E_HCO₃ here" cls="ion-h" />
-              <Readout id="r-v" k="Vm" cls="vm" />
-              <Readout id="r-df" k="Vm − E_H" />
-              <Readout id="r-hco3" k="HCO₃⁻ inside" cls="ion-hco3" />
-              <Readout id="r-free" k="free H⁺ inside" cls="ion-h" />
-              <Readout id="r-leak" k="H⁺ leaking in" />
-              <Readout id="r-out" k="acid carried out (NHE + NBC)" />
-              <Readout id="r-ca" k="carbonic anhydrase, net" />
-              <Readout id="r-bath" k="the bath" />
-              <Readout id="r-na" k="Na⁺ inside" cls="ion-na" />
-              <Readout id="r-time" k="time" />
-            </div>
-          </div>
-          <div className="panel"><h3 className="keepcase">pH, inside and out</h3><canvas id="phgauge" /></div>
-          <div className="panel"><h3>Concentrations</h3><canvas id="gauges-ph" /></div>
+          <div className="panel" id="sec-ruler"><h3>Voltage ruler</h3><canvas id="ruler-ph" /></div>
+          <div className="panel" id="sec-ph"><h3 className="keepcase">pH, inside and out</h3><canvas id="phgauge" /></div>
+        </div>
+      </div>
+      <div className="grid">
+        <div className="panel" id="sec-trace">
+          <h3 className="keepcase">pHi over time</h3><canvas id="trace-ph" />
+          <h3 id="sec-buffer">Buffer ledger</h3><canvas id="buffer" />
+        </div>
+        <div className="panel" id="sec-conc"><h3>Concentrations</h3><canvas id="gauges-ph" /></div>
+      </div>
+      <div className="panel wide" id="sec-readouts">
+        <div className="readouts">
+          <Readout id="r-ph" k="pHi" cls="ion-h" />
+          <Readout id="r-pass" k="passive pHi (E_H = Vm)" />
+          <Readout id="r-eh" k="E_H = E_HCO₃ here" cls="ion-h" />
+          <Readout id="r-v" k="Vm" cls="vm" />
+          <Readout id="r-df" k="Vm − E_H" />
+          <Readout id="r-hco3" k="HCO₃⁻ inside" cls="ion-hco3" />
+          <Readout id="r-free" k="free H⁺ inside" cls="ion-h" />
+          <Readout id="r-leak" k="H⁺ leaking in" />
+          <Readout id="r-out" k="acid carried out (NHE + NBC)" />
+          <Readout id="r-ca" k="carbonic anhydrase, net" />
+          <Readout id="r-bath" k="the bath" />
+          <Readout id="r-na" k="Na⁺ inside" cls="ion-na" />
+          <Readout id="r-time" k="time" />
         </div>
       </div>
 
       <Below>
-        <p className="lede">H⁺ is held the way the chloride chapter's Cl⁻ is held: far from where it would settle on its own, by transporters
+        <p className="lede" id="sec-text">H⁺ is held the way the chloride chapter's Cl⁻ is held: far from where it would settle on its own, by transporters
           running on the Na⁺ gradient the pump built. In Siesjö's figure, at −60 mV with pHo 7.3, H⁺ in equilibrium would sit at pHi 6.3 and
           bicarbonate at 2.5 mM inside. The cell keeps pHi at 7.0 and bicarbonate at 12.5 mM. E_H is −18 mV, so H⁺ is driven in by 42 mV all
           the time, and acid must be carried out all the time: H⁺ out by NHE1, which takes Na⁺ in, and HCO₃⁻ in with Na⁺ by NBC.</p>
@@ -223,6 +224,22 @@ function WholeCell({ bar }: { bar: ReactNode }) {
         <ModelNote />
       </Below>
     </main>
+  );
+}
+
+/**
+ * On a phone the whole cell runs to several screens; this says what is further down and jumps there (Tony: "there's no
+ * clue in the phone mode about all the stuff at the bottom"). Buttons, not links: the address is the router's.
+ */
+function OnThisPage() {
+  const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const items: [string, string][] = [["sec-ruler", "Voltage ruler"], ["sec-ph", "pH in and out"], ["sec-trace", "pHi over time"], ["sec-buffer", "Buffer ledger"],
+    ["sec-conc", "Concentrations"], ["sec-readouts", "Readouts"], ["sec-text", "What it means"]];
+  return (
+    <nav className="onpage" aria-label="Further down this page">
+      <span className="onpage-k">Further down ↓</span>
+      {items.map(([id, t]) => <button key={id} onClick={() => go(id)}>{t}</button>)}
+    </nav>
   );
 }
 
@@ -331,7 +348,17 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
     const b = new ReactionBox($<HTMLCanvasElement>("box"), buffers, buffers);
     b.ca = buffers ? R.CA_CELL : 1;
     box.current = b;
-    return loop((dt) => b.frame(dt));
+    const mm = (v: number) => (Math.abs(v) < 0.001 ? (v * 1e6).toFixed(0) + " nM" : v.toFixed(3) + " mM");
+    return loop((dt) => {
+      b.frame(dt);
+      const r = R.rates(b.box, b.ca), fol = b.followed();
+      setText("n-co2", b.box.co2.toFixed(2) + " mM"); setText("n-hco3", b.box.hco3.toFixed(2) + " mM");
+      setText("n-ph", R.pH(b.box).toFixed(2)); setText("n-h", (R.freeH(b.box) * 1e6).toFixed(0) + " nM");
+      setText("n-f", r.f.toPrecision(3) + " mM/s"); setText("n-b", r.b.toPrecision(3) + " mM/s");
+      setText("n-ft", b.fwdTot.toFixed(1) + " mM"); setText("n-bt", b.backTot.toFixed(1) + " mM");
+      setText("n-net", (b.conv >= 0 ? "+" : "−") + mm(Math.abs(b.conv)));
+      setText("n-fol", fol === null ? "—" : Math.round(100 * fol) + "%"); setText("n-t", b.t.toFixed(1) + " s");
+    });
   }, [buffers]);
   return (
     <main>
@@ -349,6 +376,22 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
           </select></label>}
           <button id="reset" onClick={() => box.current?.reset()}>Reset</button>
         </div>
+        <details className="numbers">
+          <summary>The numbers</summary>
+          <table><tbody>
+            <tr><th>CO₂</th><td id="n-co2" className="ion-co2" /></tr>
+            <tr><th>HCO₃⁻</th><td id="n-hco3" className="ion-hco3" /></tr>
+            <tr><th>pH</th><td id="n-ph" className="ion-h" /></tr>
+            <tr><th>free H⁺</th><td id="n-h" className="ion-h" /></tr>
+            <tr><th>rate, CO₂ → HCO₃⁻</th><td id="n-f" /></tr>
+            <tr><th>rate, HCO₃⁻ → CO₂</th><td id="n-b" /></tr>
+            <tr><th>net change since your last change: what actually moved</th><td id="n-net" className="vm" /></tr>
+            <tr><th>converted CO₂ → HCO₃⁻ since your last change, every conversion counted (so it climbs past what the box holds: the same molecules convert over and over)</th><td id="n-ft" /></tr>
+            <tr><th>converted HCO₃⁻ → CO₂, counted the same way</th><td id="n-bt" /></tr>
+            <tr><th>the followed carbon, share of time as HCO₃⁻</th><td id="n-fol" /></tr>
+            <tr><th>time</th><td id="n-t" /></tr>
+          </tbody></table>
+        </details>
         {bar}
       </div>
       <Below>{buffers ? <>
@@ -358,6 +401,8 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
           carbonic anhydrase to none and add CO₂ again: does it end in a different place, or only take longer?</div>
         <p>With the buffer taking up the H⁺, the same 1 mM of CO₂ now makes about 0.75 mM of HCO₃⁻, and pH falls only from 7.40 to 7.33. The buffers
           are what let the reaction run forward. Turn the buffer off and on to compare.</p>
+        <p><b>Watch the dials with the enzyme on.</b> Both needles sit near 2,000 mM/s: the enzyme turns both directions up alike, so the seesaw
+          still sits level. Add CO₂ and the seesaw dips and rights itself within a blink; set the enzyme to none and it takes seconds.</p>
         <p><b>Now the enzyme's speed shows.</b> With real amounts to convert, the reaction without the enzyme takes seconds (here, about 6 s to get
           two-thirds of the way); with the enzyme, as in a cell, it is done within a frame. The enzyme speeds both directions by the same factor, so it
           never changes where the reaction ends up, only how fast it gets there. Which way it runs depends only on how far the concentrations sit
@@ -366,9 +411,9 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
       </> : <>
         <p className="lede">The same reaction without the enzyme, in a box of plain solution. CO₂ and water make H⁺ and HCO₃⁻, and H⁺ and HCO₃⁻ make CO₂
           and water, all the time. At equilibrium the two run equally fast, so nothing changes, though plenty is happening: watch the box, where CO₂
-          rings become HCO₃⁻ triangles and back as often as each other, and the two running totals climb together while the net stays at zero.</p>
-        <div className="predict"><b>Predict.</b> Add acid. Which way does the reaction run, and where does the H⁺ go? Then add CO₂. How much becomes
-          HCO₃⁻?</div>
+          rings become HCO₃⁻ triangles and back as often as each other. The seesaw stays level, and both dials read the same, well above zero.</p>
+        <div className="predict"><b>Predict.</b> Add acid. Which way does the seesaw tip, which way does the reaction run, and where does the H⁺
+          go? Then add CO₂. How much becomes HCO₃⁻?</div>
         <p>Follow the one marked carbon: it keeps changing form, and spends most of its time as HCO₃⁻, simply because there is twenty times more HCO₃⁻
           than CO₂. Water is the solvent itself (pure water is 55 mol per liter), so it never runs short and is never drawn as dots: the box is
           water. For the same reason it is left out of the equilibrium constant, which counts water's activity, about 1 in a dilute solution.</p>
@@ -385,7 +430,8 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
 function BoxModel() {
   return <>
     <p>A sealed box of solution at 37 °C. At equilibrium [H⁺][HCO₃⁻]/[CO₂] = K, with pK 6.1, the value the cell uses. Each direction runs at its own
-      rate, forward = k·[CO₂] and back = (k/K)·[H⁺][HCO₃⁻], and carbonic anhydrase multiplies both by the same factor. The buffer is one weak acid,
+      rate, forward = k·[CO₂] and back = (k/K)·[H⁺][HCO₃⁻], and carbonic anhydrase multiplies both by the same factor. The seesaw tips by log₁₀ of forward ÷ backward, which equals
+      K·[CO₂]/([H⁺][HCO₃⁻]): level at equilibrium, about 7° further for every tenfold imbalance, up to a hundredfold. The buffer is one weak acid,
       25 mM with pK 6.9. The uncatalyzed rate (k = 0.13 s⁻¹), the buffer and the enzyme's factor of 10,000 are illustrative, not yet sourced; the
       equilibrium itself is not. Each ring or triangle is 0.25 mM; the conversions shown are thinned, both ways alike, when they come too fast to see.</p>
   </>;

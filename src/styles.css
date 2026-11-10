@@ -136,3 +136,16 @@ button:disabled { opacity: 0.4; cursor: default; }
 .caption { text-align: center; font-size: 1.05rem; min-height: 3.2em; margin: 8px 0 0; }
 .molkey { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; font-size: 0.88rem; color: var(--muted); margin-top: 6px; }
 .molkey span { display: inline-flex; align-items: center; gap: 4px; }
+details.numbers { max-width: none; margin-top: 12px; background: var(--panel-2); }
+details.numbers td { font-family: var(--mono); white-space: nowrap; }
+details.numbers th { font-weight: 400; color: var(--muted); }
+.ion-co2 { color: var(--co2); }
+.panel.wide { margin-top: 16px; }
+.panel.wide .readouts { margin-top: 0; }
+/* what is further down, on narrow screens only */
+.onpage { display: none; }
+@media (max-width: 860px) {
+  .onpage { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .onpage-k { color: var(--muted); font-size: 0.85rem; margin-right: 4px; }
+  .onpage button { font-size: 0.8rem; padding: 4px 9px; }
+}
