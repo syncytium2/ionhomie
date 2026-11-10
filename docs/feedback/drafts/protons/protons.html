@@ -1,0 +1,199 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Protons: design mockup</title>
+<style>
+body{margin:0;background:#0d1117;color:#e6edf3;font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.fig{width:1240px;padding:18px 22px 26px;box-sizing:border-box}
+h2{margin:0 0 4px;font-size:18px} p{margin:2px 0 10px;color:#9aa5b1;max-width:1180px}
+.banner{border:1px dashed #2b3442;border-radius:10px;padding:6px 12px;color:#9aa5b1;font-size:13px;margin-bottom:12px}
+.banner b{color:#e6edf3}
+svg{display:block;background:#161b22;border:1px solid #2b3442;border-radius:10px}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+</style></head><body>
+<div class="fig" id="f1"><div class="banner"><b>Design mockup for Tony's review. Not built.</b> The cell is Siesjö's (Vm −60 mV, pHo 7.3, CO₂ equal on both sides), after Siesjö 1985, <i>Prog Brain Res</i> 63:121, Fig. 8. That source comes from the slide's notes; the paper itself has not been opened. Colors for H⁺ and HCO₃⁻ are proposals. β<sub>i</sub> = 10 mM/pH is sour's illustrative value.</div>
+<h2>The page with transport running: pHi held at 7.0</h2><p>The action first: stage, ruler and gauges, then controls. The E<sub>H</sub> tick sits 42 mV above the needle, so H⁺ leaks in all the time, and NHE and NBC, running on the Na⁺ gradient, carry acid back out.</p><svg id="s1" width="1196" height="640"></svg></div>
+<div class="fig" id="f2"><h2>Transport stopped: pHi falls to the passive value</h2><p>The answer to the prediction prompt. With NHE and NBC stopped, H⁺ and HCO₃⁻ redistribute until E<sub>H</sub> = Vm, at pHi ≈ 6.3. The leak arrows become two equal one-way arrows: crossings continue with no net flux, as on the chloride page.</p><svg id="s2" width="1196" height="640"></svg></div>
+<div class="fig" id="f3"><h2>Free H⁺ as dots, or not: the two choices, side by side</h2><p>Left: a census of 1 µm³, where every free H⁺ is a dot (about 60 inside at pH 7.0). Right: no dots, only a buffer ledger on its own scale. Either way, the lesson is the charge ledger's: pH barely moves while a great deal of acid crosses.</p><svg id="s3" width="1196" height="470"></svg></div>
+<script>
+// ---- the numbers, derived (none typed in by hand) ----
+const RTF = 8.314462618*310.15/96485.33212*1000;          // mV, 26.73
+const S = RTF*Math.LN10;                                   // mV per pH unit, 61.5
+const Vm=-60, pHo=7.3, HCO3o=25, pHiActual=7.0, betaI=10;  // Siesjö's cell; β_i illustrative (sour)
+const pHiPassive = pHo + Vm/S;                             // 6.32
+const hco3 = pH => HCO3o*Math.pow(10, pH-pHo);             // CO₂ equal both sides, same pK
+const EH = pH => S*(pH-pHo);                               // E_H = E_HCO3 when CO₂ is equal
+const nM = pH => 1e9*Math.pow(10,-pH);
+const perUm3 = mM => mM*602214;                            // ions per µm³
+const dpH = pHiActual-pHiPassive;
+const boundAcid = betaI*dpH + (hco3(pHiActual)-hco3(pHiPassive)); // mM: intrinsic + bicarbonate consumed
+const freeRise = (nM(pHiPassive)-nM(pHiActual))*1e-6;               // mM
+const ratio = boundAcid/freeRise;
+const f1=(x,d=1)=>x.toFixed(d).replace("-","−");
+const C={H:"#cc79a7",HCO3:"#e69f00",Na:"#ececec",CO2:"#9aa5b1",Vm:"#f0e442",mem:"#d9b77e",bath:"#101826",cyto:"#1a1626",gray:"#8e9aaf",mut:"#9aa5b1",txt:"#e6edf3",line:"#2b3442",panel:"#1c2330",ok:"#7fb069",warn:"#ff8a65"};
+
+// ---- a tiny SVG builder ----
+const NS="http://www.w3.org/2000/svg";
+function el(p,tag,a,txt){const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;p.appendChild(e);return e}
+const T=(p,x,y,s,a={})=>el(p,"text",Object.assign({x,y,fill:C.txt,"font-size":13},a),s);
+function arrowDefs(svg){const d=el(svg,"defs",{});for(const [id,col] of [["aH",C.H],["aB",C.HCO3],["aV",C.Vm],["aG",C.mut],["aN",C.Na]]){const m=el(d,"marker",{id,viewBox:"0 0 10 10",refX:8,refY:5,markerWidth:5,markerHeight:5,orient:"auto-start-reverse"});el(m,"path",{d:"M0,0L10,5L0,10z",fill:col})}}
+function arrow(p,x1,y1,x2,y2,col,mk,w=3,dash){el(p,"line",{x1,y1,x2,y2,stroke:col,"stroke-width":w,"marker-end":`url(#${mk})`,"stroke-dasharray":dash||"none","stroke-linecap":"round"})}
+function glyph(p,ion,x,y,r=5,a=1){
+  if(ion==="H"){el(p,"circle",{cx:x,cy:y,r:r*0.75,fill:C.H,opacity:a});el(p,"text",{x,y:y+3,fill:"#0d1117","font-size":r*1.6,"text-anchor":"middle","font-weight":700,opacity:a},"+")}
+  else if(ion==="HCO3"){el(p,"path",{d:`M${x},${y-r*1.2}L${x+r*1.2},${y+r}L${x-r*1.2},${y+r}z`,fill:C.HCO3,opacity:a});el(p,"text",{x,y:y+r*0.75,fill:"#0d1117","font-size":r*1.5,"text-anchor":"middle","font-weight":700,opacity:a},"−")}
+  else if(ion==="Na"){el(p,"circle",{cx:x,cy:y,r,fill:C.Na,opacity:a});el(p,"text",{x,y:y+3.5,fill:"#0d1117","font-size":r*1.7,"text-anchor":"middle","font-weight":700,opacity:a},"+")}
+  else if(ion==="CO2"){el(p,"circle",{cx:x,cy:y,r,fill:"none",stroke:C.CO2,"stroke-width":1.5,opacity:a})}
+}
+// a gray transporter on the membrane, rocking (drawn at one moment), with binding rings
+function protein(p,cx,cy,ang,label,rings,running){
+  const g=el(p,"g",{transform:`translate(${cx},${cy}) rotate(${ang})`});
+  el(g,"rect",{x:-26,y:-17,width:52,height:34,rx:12,fill:running?"#8e9aaf":"#4a5263",stroke:"#0d1117","stroke-width":1.5});
+  el(g,"line",{x1:0,y1:-15,x2:running?6:0,y2:15,stroke:"#0d1117","stroke-width":3});
+  rings.forEach((ion,i)=>{const rx=-13+i*13;el(g,"circle",{cx:rx,cy:0,r:5.5,fill:"none",stroke:C[ion],"stroke-width":1.4});if(running&&i%2===0)glyph(g,ion,rx,0,4)});
+  return g;
+}
+
+// ---- figures 1 and 2: the page ----
+function page(svg,running){
+  arrowDefs(svg);
+  // nav bar
+  el(svg,"rect",{x:0,y:0,width:1196,height:40,fill:"#0d1117"});
+  T(svg,16,25,"ionhomie",{"font-weight":700});
+  const nav=["Diffusion","Drift","Compartments","One channel","GHK","Rundown","Pumps","Chloride","Protons","Homeostat"];
+  let nx=330;for(const n of nav){T(svg,nx,25,n,{fill:n==="Protons"?C.Vm:"#b4b9ff","font-size":12.5,"font-weight":n==="Protons"?700:400});nx+=n.length*7.2+18}
+  el(svg,"line",{x1:0,y1:40,x2:1196,y2:40,stroke:C.line});
+  // stage
+  const sx=16,sy=52,sw=720,sh=440,cx=sx+360,cy=sy+225,R=175;
+  el(svg,"rect",{x:sx,y:sy,width:sw,height:sh,rx:10,fill:C.bath});
+  el(svg,"circle",{cx,cy,r:R,fill:C.cyto});
+  el(svg,"circle",{cx,cy,r:R,fill:"none",stroke:C.mem,"stroke-width":10});
+  T(svg,sx+12,sy+20,"outside: pH 7.3 · HCO₃⁻ 25 mM · CO₂ equal",{fill:C.mut,"font-size":12});
+  T(svg,cx,cy+R-48,`inside: pH ${f1(running?pHiActual:pHiPassive,2)} · HCO₃⁻ ${f1(hco3(running?pHiActual:pHiPassive))} mM`,{fill:C.mut,"font-size":12,"text-anchor":"middle"});
+  const at=d=>[cx+R*Math.cos(d*Math.PI/180),cy+R*Math.sin(d*Math.PI/180)];
+  // NHE at upper right
+  let [x,y]=at(-40);protein(svg,x,y,-40+90,"NHE",["Na","H"],running);
+  T(svg,x+58,y-6,running?"NHE1: Na⁺ in, H⁺ out":"NHE1: stopped",{fill:running?C.txt:C.mut,"font-weight":600});
+  if(running){arrow(svg,x-50,y+44,x-14,y+12,C.H,"aH",5);arrow(svg,x+14,y-12,x+48,y-44,C.H,"aH",5);arrow(svg,x+62,y-6,x+20,y+26,C.Na,"aN",3)}
+  // NBC at right
+  [x,y]=at(15);protein(svg,x,y,15+90,"NBC",["Na","HCO3","HCO3"],running);
+  T(svg,x+30,y+38,running?"NBC: Na⁺ + HCO₃⁻ in":"NBC: stopped",{fill:running?C.txt:C.mut,"font-weight":600});
+  if(running){arrow(svg,x+56,y+14,x+16,y+4,C.HCO3,"aB",4);arrow(svg,x-14,y-4,x-56,y-14,C.HCO3,"aB",4)}
+  // H⁺ leak at left
+  [x,y]=at(185);
+  const lg=el(svg,"g",{transform:`translate(${x},${y}) rotate(${185+90})`});
+  el(lg,"rect",{x:-9,y:-16,width:18,height:32,rx:4,fill:"#3b3247",stroke:C.H,"stroke-width":1.5});
+  T(svg,x-200,y-22,"H⁺ leak",{fill:C.txt,"font-weight":600});
+  if(running){arrow(svg,x-62,y,x+56,y+4,C.H,"aH",4);T(svg,x-200,y+24,"net in, driven by 42 mV",{fill:C.mut,"font-size":12})}
+  else{arrow(svg,x-62,y-8,x+54,y-8,C.H,"aH",2);arrow(svg,x+54,y+10,x-62,y+10,C.H,"aH",2);T(svg,x-200,y+30,"in = out: no net",{fill:C.mut,"font-size":12})}
+  // CO₂ crossing the lipid, CA hydrating it
+  [x,y]=at(130);
+  for(let k=0;k<3;k++)glyph(svg,"CO2",x-48+k*10,y+40-k*12,5);
+  arrow(svg,x-30,y+36,x+46,y-26,C.CO2,"aG",2,"5 4");
+  T(svg,x-140,y+66,"CO₂ crosses the lipid freely",{fill:C.mut,"font-size":12});
+  const rx=cx-70,ry=cy+40;
+  el(svg,"rect",{x:rx-6,y:ry-16,width:212,height:24,rx:6,fill:C.panel,stroke:C.line});
+  T(svg,rx+4,ry+1,"CA: CO₂ + H₂O ⇌ H⁺ + HCO₃⁻",{"font-size":12.5});
+  // metabolic acid
+  el(svg,"ellipse",{cx:cx-30,cy:cy-60,rx:44,ry:22,fill:"#2a2236",stroke:C.H,"stroke-dasharray":"3 3"});
+  T(svg,cx-30,cy-56,"metabolism",{fill:C.mut,"font-size":12,"text-anchor":"middle"});
+  arrow(svg,cx-30,cy-84,cx-30,cy-118,C.H,"aH",3);
+  T(svg,cx-30,cy-124,"acid made inside",{fill:C.mut,"font-size":12,"text-anchor":"middle"});
+  // buffer: a few H⁺ held on large buffer shapes
+  for(const [bx,by] of [[cx-110,cy-10],[cx+70,cy+10],[cx-40,cy+100]]){el(svg,"ellipse",{cx:bx,cy:by,rx:16,ry:10,fill:"#8a7f6a",opacity:.8});glyph(svg,"H",bx+12,by-8,5)}
+  T(svg,cx-150,cy+26,"buffer (holds H⁺)",{fill:C.mut,"font-size":11.5});
+  // clock
+  T(svg,sx+sw-12,sy+20,running?"clock 10× real time":"clock 10× · 20 min after stopping",{fill:C.mut,"font-size":12,"text-anchor":"end"});
+
+  // ruler
+  const rx0=756,rw=180,top=60,bot=480,vmin=-110,vmax=40;
+  el(svg,"rect",{x:rx0,y:sy,width:rw,height:sh,rx:10,fill:C.panel});
+  const vy=v=>top+(vmax-v)/(vmax-vmin)*(bot-top);
+  el(svg,"line",{x1:rx0+60,y1:top,x2:rx0+60,y2:bot,stroke:C.mut,"stroke-width":2});
+  for(let v=-100;v<=40;v+=20){el(svg,"line",{x1:rx0+54,y1:vy(v),x2:rx0+66,y2:vy(v),stroke:C.mut});if(Math.abs(v-Vm)>5)T(svg,rx0+48,vy(v)+4,f1(v,0),{fill:C.mut,"font-size":11,"text-anchor":"end"})}
+  T(svg,rx0+90,top-2,"mV",{fill:C.mut,"font-size":11});
+  const eh=EH(running?pHiActual:pHiPassive);
+  // E_H tick
+  el(svg,"line",{x1:rx0+60,y1:vy(eh),x2:rx0+120,y2:vy(eh),stroke:C.H,"stroke-width":4});
+  T(svg,rx0+124,vy(eh)-2,`E_H ${f1(eh)}`,{fill:C.H,"font-size":12,"font-weight":700});
+  T(svg,rx0+124,vy(eh)+12,"= E_HCO₃",{fill:C.HCO3,"font-size":11});
+  // Vm needle
+  el(svg,"path",{d:`M${rx0+8},${vy(Vm)}L${rx0+60},${vy(Vm)}`,stroke:C.Vm,"stroke-width":4});
+  T(svg,rx0+8,vy(Vm)-8,"Vm −60",{fill:C.Vm,"font-size":12,"font-weight":700});
+  if(running){arrow(svg,rx0+92,vy(Vm)-2,rx0+92,vy(eh)+8,C.H,"aH",3);T(svg,rx0+98,(vy(Vm)+vy(eh))/2+4,`${f1(eh-Vm,0)} mV`,{fill:C.H,"font-size":12})}
+  else T(svg,rx0+70,vy(Vm)+34,"E_H on the needle:",{fill:C.mut,"font-size":11.5}),T(svg,rx0+70,vy(Vm)+48,"equilibrium",{fill:C.mut,"font-size":11.5});
+
+  // gauges
+  const gx=952,gw=228;
+  el(svg,"rect",{x:gx,y:sy,width:gw,height:sh,rx:10,fill:C.panel});
+  T(svg,gx+14,sy+24,"pH",{fill:C.mut,"font-weight":700});
+  const pmin=6.0,pmax=7.6,px=p=>gx+20+(p-pmin)/(pmax-pmin)*(gw-40);
+  const pg=(yy,label,val,col,ghost)=>{el(svg,"rect",{x:gx+20,y:yy,width:gw-40,height:16,rx:4,fill:"#0d1117"});
+    el(svg,"rect",{x:gx+20,y:yy,width:px(val)-gx-20,height:16,rx:4,fill:col,opacity:.85});
+    if(ghost!=null){el(svg,"line",{x1:px(ghost),y1:yy-4,x2:px(ghost),y2:yy+20,stroke:C.txt,"stroke-width":2,"stroke-dasharray":"3 2"})}
+    T(svg,gx+20,yy-6,`${label} ${f1(val,2)}`,{"font-size":12})};
+  pg(sy+58,"outside",pHo,C.H);
+  pg(sy+104,"inside",running?pHiActual:pHiPassive,C.H,running?pHiPassive:pHiActual);
+  T(svg,gx+20,sy+140,running?`dashed: passive, ${f1(pHiPassive,2)}`:`dashed: held, ${f1(pHiActual,2)}`,{fill:C.mut,"font-size":11});
+  for(const p of [6,6.5,7,7.5])T(svg,px(p),sy+160,p.toFixed(1),{fill:C.mut,"font-size":10,"text-anchor":"middle"});
+  T(svg,gx+14,sy+200,"HCO₃⁻ (mM, log)",{fill:C.mut,"font-weight":700});
+  const lx=c=>gx+20+(Math.log10(c)-0)/(Math.log10(50))*(gw-40);
+  const hg=(yy,label,val,ghost)=>{el(svg,"rect",{x:gx+20,y:yy,width:gw-40,height:16,rx:4,fill:"#0d1117"});
+    el(svg,"rect",{x:gx+20,y:yy,width:lx(val)-gx-20,height:16,rx:4,fill:C.HCO3,opacity:.85});
+    if(ghost!=null)el(svg,"line",{x1:lx(ghost),y1:yy-4,x2:lx(ghost),y2:yy+20,stroke:C.txt,"stroke-width":2,"stroke-dasharray":"3 2"});
+    T(svg,gx+20,yy-6,`${label} ${f1(val)}`,{"font-size":12})};
+  hg(sy+236,"outside",HCO3o);
+  hg(sy+282,"inside",hco3(running?pHiActual:pHiPassive),hco3(running?pHiPassive:pHiActual));
+  T(svg,gx+14,sy+330,"free H⁺ inside",{fill:C.mut,"font-weight":700});
+  T(svg,gx+14,sy+352,`${f1(nM(running?pHiActual:pHiPassive),0)} nM`,{"font-size":20,"font-weight":700,fill:C.H});
+  T(svg,gx+14,sy+376,`≈ ${f1(perUm3(nM(running?pHiActual:pHiPassive)*1e-6),0)} ions per µm³`,{fill:C.mut,"font-size":12});
+  T(svg,gx+14,sy+410,"needle, ticks: mV · gauges: pH, mM",{fill:C.mut,"font-size":11});
+
+  // controls
+  const cy0=508;let bx=16;
+  for(const [b,on] of [["Stop NHE",running],["Stop NBC",running],["Stop both",running],["Acid load ×2",false],["Reset",false]]){
+    const w=b.length*8+26;el(svg,"rect",{x:bx,y:cy0,width:w,height:30,rx:8,fill:!running&&b.startsWith("Stop")?"#2d3a1f":C.panel,stroke:!running&&b.startsWith("Stop")?C.ok:C.line});
+    T(svg,bx+13,cy0+20,b,{"font-size":13});bx+=w+8}
+  T(svg,bx+12,cy0+20,"Vm",{fill:C.Vm,"font-size":13,"font-weight":700});
+  el(svg,"line",{x1:bx+40,y1:cy0+15,x2:bx+240,y2:cy0+15,stroke:C.line,"stroke-width":4});
+  el(svg,"circle",{cx:bx+40+200*(Vm+90)/80,cy:cy0+15,r:8,fill:C.Vm});
+  T(svg,bx+250,cy0+20,"−60 mV",{fill:C.mut,"font-size":12});
+  T(svg,860,cy0+20,"Cell:",{fill:C.mut,"font-size":13});
+  el(svg,"rect",{x:898,y:cy0,width:282,height:30,rx:8,fill:C.panel,stroke:C.line});
+  T(svg,910,cy0+20,"Siesjö's (−60 mV, pHo 7.3) ▾",{"font-size":13});
+  // the prompt
+  el(svg,"rect",{x:16,y:552,width:1164,height:72,rx:10,fill:"#0d1117",stroke:C.line});
+  T(svg,32,578,running?"Predict first: switch off NHE and NBC. Where does pHi go?":"You predicted 7.2. Without transport, pHi falls until E_H reaches Vm:",{"font-weight":700});
+  if(running){let ox=32;for(const c of ["7.4","7.2","≈ 6.3"]){el(svg,"rect",{x:ox,y:590,width:80,height:26,rx:7,fill:C.panel,stroke:C.line});T(svg,ox+40,608,c,{"text-anchor":"middle"});ox+=92}
+    T(svg,320,608,"(text, sources and the model's equations sit below, per ADR-0008)",{fill:C.mut,"font-size":12})}
+  else T(svg,32,604,`pHi = pHo + Vm/S = 7.3 − 60/${f1(S)} = ${f1(pHiPassive,2)}.   S = RT·ln10/F = ${f1(S)} mV per pH unit at 37 °C.`,{fill:C.mut,"font-size":13});
+}
+page(document.getElementById("s1"),true);
+page(document.getElementById("s2"),false);
+
+// ---- figure 3: dots or a ledger ----
+(function(){
+  const svg=document.getElementById("s3");arrowDefs(svg);
+  let seed=11;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+  const box=(x,y,s,n,label,sub)=>{el(svg,"rect",{x,y,width:s,height:s,rx:6,fill:label.startsWith("inside")?C.cyto:C.bath,stroke:C.line});
+    for(let i=0;i<n;i++)glyph(svg,"H",x+10+rnd()*(s-20),y+10+rnd()*(s-20),4.5);
+    T(svg,x,y-22,label,{"font-weight":700});T(svg,x,y-7,sub,{fill:C.mut,"font-size":12})};
+  T(svg,20,30,"Free H⁺ as dots: a census of 1 µm³",{"font-weight":700,"font-size":15});
+  const nIn=Math.round(perUm3(nM(pHiActual)*1e-6)), nOut=Math.round(perUm3(nM(pHo)*1e-6));
+  box(20,90,220,nOut,`outside, pH ${pHo.toFixed(1)}`,`${nOut} free H⁺`);
+  box(270,90,220,nIn,`inside, pH ${pHiActual.toFixed(1)}`,`${nIn} free H⁺`);
+  T(svg,20,340,"1 dot = 1 free H⁺. Countable, on a stated scale (ADR-0011).",{fill:C.mut,"font-size":12.5});
+  T(svg,20,362,`Bound to buffers in the same 1 µm³, at pH 7.0: millions. Not drawn.`,{fill:C.mut,"font-size":12.5});
+  T(svg,20,384,"Risk: dots invite counting, and the bound H⁺ are invisible.",{fill:C.warn,"font-size":12.5});
+  el(svg,"line",{x1:560,y1:20,x2:560,y2:450,stroke:C.line});
+  T(svg,590,30,"No dots: a buffer ledger, on its own scale",{"font-weight":700,"font-size":15});
+  T(svg,590,58,`If pHi fell from ${pHiActual.toFixed(1)} to ${f1(pHiPassive,2)} (transport stopped), per µm³ of cytoplasm:`,{fill:C.mut,"font-size":12.5});
+  const lx0=590,lw=560,lg=v=>lx0+Math.log10(v)/8*lw;
+  const bar=(y,v,col,label)=>{el(svg,"rect",{x:lx0,y,width:lw,height:22,rx:5,fill:"#0d1117"});el(svg,"rect",{x:lx0,y,width:lg(v)-lx0,height:22,rx:5,fill:col,opacity:.85});T(svg,lx0,y-6,label,{"font-size":13})};
+  const freeN=perUm3(freeRise), boundN=perUm3(boundAcid);
+  bar(100,freeN,C.H,`free H⁺ added: ${f1(freeN,0)}`);
+  bar(160,boundN,"#8a7f6a",`H⁺ taken up by buffers: ${(boundN/1e6).toFixed(1)} million (${f1(boundAcid)} mM)`);
+  for(let k=0;k<=8;k+=2)T(svg,lg(Math.pow(10,k)),205,`10${["⁰","","²","","⁴","","⁶","","⁸"][k]}`,{fill:C.mut,"font-size":11,"text-anchor":"middle"});
+  T(svg,590,240,`For every H⁺ that stays free, about ${(Math.round(ratio/1000)*1000).toLocaleString("en-US")} are bound.`,{"font-weight":700,"font-size":15,fill:C.H});
+  T(svg,590,264,"The charge ledger's lesson again: Vm moves when about one ion in 45,000 crosses.",{fill:C.mut,"font-size":12.5});
+  T(svg,590,296,`Buffering: β = β_i ${betaI} mM/pH (illustrative) + the CO₂/HCO₃⁻ system (open, CO₂ held equal).`,{fill:C.mut,"font-size":12});
+  T(svg,590,316,`The bicarbonate share: HCO₃⁻ falls from ${f1(hco3(pHiActual))} to ${f1(hco3(pHiPassive))} mM.`,{fill:C.mut,"font-size":12});
+  T(svg,590,352,"Could carry both: dots in the census view, the ledger beside the gauges.",{fill:C.ok,"font-size":12.5});
+})();
+</script></body></html>
