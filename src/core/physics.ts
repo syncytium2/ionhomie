@@ -125,16 +125,20 @@ export const pco2 = (bath: Bath) => bath.HCO3 / (CO2_SOL * 10 ** (bath.pHo - PK_
  * - with pHo held (isohydric): the bath's HCO₃⁻ changes by the same factor, replacing Cl⁻ one for one so the bath stays
  *   electroneutral and isosmotic, and pHo stays where it was.
  * Inside, the CO₂ that enters hydrates to equal amounts of H⁺ and HCO₃⁻; only the non-bicarbonate buffers can take up that
- * H⁺, so pHi falls at once to where the HCO₃⁻ made equals β_i times the fall. The amounts are untouched.
+ * H⁺, so pHi falls at once to where the HCO₃⁻ made equals β_i times the fall. The amounts are untouched; `hydrated` is the
+ * HCO₃⁻ carbonic anhydrase made at once, mol.
  */
-export function co2Step(cell: Cell, n: Amounts, bath: Bath, factor: number, holdPHo = false): { n: Amounts; bath: Bath } {
+export function co2Step(cell: Cell, n: Amounts, bath: Bath, factor: number, holdPHo = false): { n: Amounts; bath: Bath; hydrated: number } {
   const dHCO3 = bath.HCO3 * (factor - 1);
   const b2: Bath = holdPHo ? { ...bath, HCO3: bath.HCO3 + dHCO3, Cl: bath.Cl - dHCO3 } : { ...bath, pHo: bath.pHo - Math.log10(factor) };
   const h0 = hco3In(n.pHi, bath);
   const f = (p: number) => hco3In(p, b2) - h0 - cell.acid.betaI * (n.pHi - p); // HCO₃⁻ made − H⁺ the buffers took
   let lo = n.pHi - 2, hi = n.pHi + 2;
   for (let k = 0; k < 80; k++) { const m = (lo + hi) / 2; if (f(m) > 0) hi = m; else lo = m; }
-  return { n: { ...n, pHi: (lo + hi) / 2 }, bath: b2 };
+  const pHi = (lo + hi) / 2;
+  // what carbonic anhydrase hydrated at once, mol (negative when CO₂ falls and it runs back)
+  const hydrated = (hco3In(pHi, b2) - h0) * volumeFor(n, bath);
+  return { n: { ...n, pHi }, bath: b2, hydrated };
 }
 
 /** Activation of an acid extruder by internal H⁺: 1 / (1 + 10^(n(pHi − pK))). */
@@ -296,9 +300,10 @@ export interface Snapshot {
   E: Conc; net: Conc;
   /**
    * Acid and base, mol/s: the H⁺ leak (inward positive), NHE (H⁺ out), NBC (HCO₃⁻ in), and the net acid
-   * gained. E_H in volts (= E_HCO₃ here). beta in mM per pH unit.
+   * gained; ca, carbonic anhydrase's net hydration (CO₂ → H⁺ + HCO₃⁻; negative runs it back), which CO₂'s net entry
+   * equals. E_H in volts (= E_HCO₃ here). beta in mM per pH unit.
    */
-  acid: { leak: number; nhe: number; nbc: number; net: number; EH: number; beta: number };
+  acid: { leak: number; nhe: number; nbc: number; net: number; ca: number; EH: number; beta: number };
 }
 
 /** Everything a view wants to draw about the cell right now. */
@@ -320,13 +325,20 @@ export function snapshot(cell: Cell, n: Amounts, bath: Bath = BATH, extra?: Extr
   const kcc2 = kcc2Rate(cell, ci, bath);
   const nhe = nheRate(cell, ci, bath, area), nbc = nbcRate(cell, ci, bath, area);
   const hIn = -hLeak(cell, V, ci, bath, area);
-  const acid = { leak: hIn, nhe, nbc, net: hIn - nhe - nbc, EH: nernst(1, hFree(bath.pHo), ci.H), beta: buffering(cell, ci.pHi, bath) };
+  const beta = buffering(cell, ci.pHi, bath), netAcid = hIn - nhe - nbc;
+  const acid = { leak: hIn, nhe, nbc, net: netAcid, ca: 0, EH: nernst(1, hFree(bath.pHo), ci.H), beta };
   const net: Conc = {
     Na: leak.Na + 3 * pump - 3 * ncx - nkcc1 - nhe - nbc + (extra?.Na ?? 0),
     K: leak.K - 2 * pump - nkcc1 + kcc2 + (extra?.K ?? 0),
     Cl: leak.Cl - 2 * nkcc1 + kcc2 + (extra?.Cl ?? 0),
     Ca: leak.Ca + pmca + ncx + (extra?.Ca ?? 0),
   };
+  // carbonic anhydrase's net hydration, CO₂ + H₂O → H⁺ + HCO₃⁻, mol/s (negative: dehydration). CA is instant, so it is
+  // whatever keeps HCO₃⁻ on pHi as the cell's volume changes: the HCO₃⁻ inside (amount) changes by NBC's import plus this.
+  // CO₂ crosses the membrane at the same net rate (inward when positive), since CO₂ inside is held equal to the bath's.
+  const dHCO3 = -Math.LN10 * ci.HCO3 * (netAcid / volume / beta); // mM/s, through pHi
+  const dVol = (-(net.Na + net.K + net.Cl + net.Ca) + volume * dHCO3) / (osmolarity(bath) - ci.HCO3); // m³/s
+  acid.ca = ci.HCO3 * dVol + volume * dHCO3 - nbc;
   return { V, ci, volume, area, leak, pump, pmca, ncx, iClamp, nkcc1, kcc2, E, net, acid };
 }
 

@@ -97,3 +97,27 @@ test("Doubling CO₂ with pHo held: pHi drops at once, then NHE and NBC bring it
   const back = I.co2Step(h.cell, m, bath, 0.5, true);
   close(back.bath.HCO3, 25, 1e-12); close(back.bath.Cl, 106, 1e-12, "the bath restored");
 });
+
+test("Carbonic anhydrase at rest runs backward at NBC's rate: the HCO₃⁻ NBC brings in leaves as CO₂", () => {
+  const h = I.healthyState();
+  const s = I.snapshot(h.cell, h.n);
+  close(s.acid.ca / s.acid.nbc, -1, 1e-3, "net hydration = −NBC");
+  close((-s.acid.ca / s.volume) * 60, 0.072, 0.001, "mM/min of HCO₃⁻ turned back into CO₂");
+});
+
+test("A CO₂ step is one forward burst of carbonic anhydrase; then it runs back, more weakly with pHo held", () => {
+  const h = I.healthyState();
+  const rest = I.snapshot(h.cell, h.n).acid.ca;
+  const r = I.co2Step(h.cell, h.n, I.BATH, 2, true);
+  close(r.hydrated / I.sphere(10e-6).volume, I.hco3In(r.n.pHi, r.bath) - 12.53, 0.02, "hydrated at once, mM");
+  close(r.hydrated / I.sphere(10e-6).volume, 2.28, 0.02, "about 2.3 mM at once");
+  let n = r.n;
+  for (let t = 0; t < 1800; t += 5) n = I.step(h.cell, n, 5, r.bath).n;
+  const s = I.snapshot(h.cell, n, r.bath);
+  assert.ok(s.acid.ca < 0 && s.acid.ca > rest, `back, more weakly than at rest: ${s.acid.ca} vs ${rest}`);
+  // its net equals the HCO₃⁻ inside's rise minus NBC's import, by a finite difference
+  const n2 = I.step(h.cell, n, 1, r.bath).n, s2 = I.snapshot(h.cell, n2, r.bath);
+  close(s.acid.ca, s2.ci.HCO3 * s2.volume - s.ci.HCO3 * s.volume - s.acid.nbc, Math.abs(s.acid.ca) * 0.05, "ca = d(HCO₃⁻ amount)/dt − NBC");
+  const alone = I.co2Step(h.cell, h.n, I.BATH, 2);
+  assert.ok(I.snapshot(h.cell, alone.n, alone.bath).acid.ca < 2 * rest, "with CO₂ alone it runs back more than twice as hard");
+});

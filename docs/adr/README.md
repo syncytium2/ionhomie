@@ -60,3 +60,4 @@ change so the two never disagree.
 | [0022](0022-a-protons-page-after-chloride-on-siesjos-cell.md) | A protons page after chloride, on Siesjö's cell, with its own small pH model | Accepted (Tony: "build it", then each choice ruled one at a time, ADR-0024); its separate model superseded by ADR-0023 |
 | [0023](0023-h-and-hco3-join-the-shared-cell.md) | H⁺ and HCO₃⁻ join the shared cell | Accepted (Tony: "fold in now"; the rate laws and sizes are Claude's) |
 | [0024](0024-a-co2-step-two-ways-and-a-legend-under-every-stage.md) | A CO₂ step, two ways, on the protons page; an ion legend under every stage | Accepted (Tony, one decision at a time) |
+| [0025](0025-labels-over-the-ions-and-carbonic-anhydrase-at-its-net.md) | Labels over the ions; carbonic anhydrase shown at its net | Accepted (Tony: "both"; the forms are Claude's) |

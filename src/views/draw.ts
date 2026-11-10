@@ -957,6 +957,7 @@ export class CellStage {
       const u = f.t * f.t * (3 - 2 * f.t);
       glyph(ctx, f.q.ion, f.x0 + (f.x1 - f.x0) * u, f.y0 + (f.y1 - f.y0) * u, 4.5, 1);
     }
+    this.pathways.forEach((pw) => this.drawLabel(ctx, g, pw)); // over the ions, in every view
     if (focus) this.drawFocusLabels(ctx, g);
     else this.drawScale(ctx, g);
     if (view === "lens") this.drawLens(ctx, g);
@@ -1284,13 +1285,18 @@ export class CellStage {
       });
     }
     ctx.restore();
-    if (pw.label) {
-      ctx.font = "600 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      // kept on the stage: at phone width a label beside the cell's edge would otherwise run off it
-      const half = ctx.measureText(pw.label).width / 2 + 4;
-      const lx = Math.max(half, Math.min(g.w - half, g.cx + Math.cos(pw.angle) * (g.R + 40 * g.k))), ly = g.cy + Math.sin(pw.angle) * (g.R + 40 * g.k);
-      ctx.lineWidth = 3; ctx.strokeStyle = STAGE.bath; ctx.strokeText(pw.label, lx, ly);
-      ctx.fillStyle = cssVar("--text"); ctx.fillText(pw.label, lx, ly);
-    }
+  }
+  /**
+   * A pathway's name, drawn in a last pass over the ions on a dark box, so passing ions never hide it (Tony: "ions occlude
+   * the text"); the protein itself stays under the ions, so no ion hides behind a pore.
+   */
+  private drawLabel(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, pw: Pathway) {
+    if (!pw.label) return;
+    ctx.font = "600 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    // kept on the stage: at phone width a label beside the cell's edge would otherwise run off it
+    const half = ctx.measureText(pw.label).width / 2 + 5;
+    const lx = Math.max(half, Math.min(g.w - half, g.cx + Math.cos(pw.angle) * (g.R + 40 * g.k))), ly = g.cy + Math.sin(pw.angle) * (g.R + 40 * g.k);
+    ctx.fillStyle = "rgba(13,17,23,0.78)"; ctx.beginPath(); ctx.roundRect(lx - half, ly - 9, 2 * half, 18, 4); ctx.fill();
+    ctx.fillStyle = cssVar("--text"); ctx.fillText(pw.label, lx, ly);
   }
 }

@@ -2,7 +2,7 @@ import * as I from "../core/physics.ts";
 import * as P from "../core/protons.ts";
 import { $, Trace, fmtMv, gauges, loop, ruler, setText, viewPref } from "../views/draw.ts";
 import { ACID_ANGLE, Lab } from "../views/lab.ts";
-import { bufferLedger, overlay, phGauge } from "../views/protons-views.ts";
+import { CaView, bufferLedger, overlay, phGauge } from "../views/protons-views.ts";
 import { Below, ModelNote, Readout, ViewPicker, useEngine, IonKey } from "./parts.tsx";
 import { Clock } from "./Rundown.tsx";
 
@@ -15,6 +15,7 @@ function engine() {
   let mode: Mode = "siesjo", vmMv = -60, pH0 = 7.0, restLeak = 1;
   type Co2 = "normal" | "alone" | "held";
   let co2: Co2 = "normal";
+  const caView = new CaView();
   const lab = new Lab({
     pump: true, acid: true, speed: 1800, autorun: true, ions: ["Na", "K", "Cl", "A", "HCO3"], stageHeight: 420,
     setup: (cell) => { if (mode === "siesjo") P.toSiesjo(cell, vmMv / 1000); },
@@ -53,8 +54,8 @@ function engine() {
   $("both").onclick = () => { const on = !a().nhe.on && !a().nbc.on; a().nhe.on = on; a().nbc.on = on; changed(); };
   // a CO₂ step changes the bath and, at once, pHi (physics.ts, co2Step); a second press returns it
   const setCo2 = (to: Co2) => {
-    if (co2 !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 0.5, co2 === "held"); lab.n = r.n; lab.bath = r.bath; }
-    if (to !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 2, to === "held"); lab.n = r.n; lab.bath = r.bath; }
+    if (co2 !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 0.5, co2 === "held"); lab.n = r.n; lab.bath = r.bath; caView.burst(r.hydrated); }
+    if (to !== "normal") { const r = I.co2Step(lab.cell, lab.n, lab.bath, 2, to === "held"); lab.n = r.n; lab.bath = r.bath; caView.burst(r.hydrated); }
     co2 = to; lab.resnap(); changed();
   };
   $("co2").onclick = () => setCo2(co2 === "alone" ? "normal" : "alone");
@@ -75,10 +76,11 @@ function engine() {
     record();
     lab.draw(dt, ["Na", "K", "Cl"]); // the stage; this page draws its own ruler and gauges
     const s = lab.s, c = s.ci, pHo = lab.bath.pHo, Vmv = s.V * 1000, EH = s.acid.EH * 1000;
-    if (viewPref.view === "cell") overlay(lab.stage, $<HTMLCanvasElement>("stage"), {
-      leak: s.acid.leak, nhe: s.acid.nhe, nbc: s.acid.nbc, ref: restLeak, clock: lab.t / Math.max(1, lab.o.speed),
-      leakAngle: ANGLE.leak, nheAngle: ANGLE.nhe, nbcAngle: ANGLE.nbc, co2Angle: ANGLE.co2,
-    });
+    caView.step(dt, s.acid.ca, lab.running ? lab.o.speed : 0);
+    if (viewPref.view === "cell") {
+      overlay(lab.stage, $<HTMLCanvasElement>("stage"), { leak: s.acid.leak, nhe: s.acid.nhe, nbc: s.acid.nbc, ref: restLeak, leakAngle: ANGLE.leak, nheAngle: ANGLE.nhe, nbcAngle: ANGLE.nbc });
+      caView.draw(lab.stage, $<HTMLCanvasElement>("stage"), ANGLE.co2, restLeak);
+    }
     ruler($<HTMLCanvasElement>("ruler-ph"), { V: Vmv, E: { K: s.E.K * 1000, H: EH, HCO3: EH }, g: { K: 1, H: 0.3, HCO3: 0 }, min: -110, max: 40, height: 400 });
     const pass = P.passivePHi(Vmv, pHo);
     phGauge($<HTMLCanvasElement>("phgauge"), { pHi: c.pHi, pHo, passive: pass, measured: P.SIESJO.pHi });
@@ -96,6 +98,7 @@ function engine() {
     setText("r-free", `${Math.round(c.H * P.PER_UM3_PER_MM)} per µm³`);
     setText("r-leak", perMin(s.acid.leak));
     setText("r-out", perMin(s.acid.nhe + s.acid.nbc));
+    setText("r-ca", `${perMin(Math.abs(s.acid.ca))} ${s.acid.ca >= 0 ? "CO₂ → HCO₃⁻" : "HCO₃⁻ → CO₂"}`);
     setText("r-bath", `pH ${pHo.toFixed(2)}, CO₂ ${I.pco2(lab.bath).toFixed(0)} mmHg, HCO₃⁻ ${lab.bath.HCO3.toFixed(0)} mM`);
   });
 }
@@ -146,6 +149,7 @@ export default function Protons() {
               <Readout id="r-free" k="free H⁺ inside" cls="ion-h" />
               <Readout id="r-leak" k="H⁺ leaking in" />
               <Readout id="r-out" k="acid carried out (NHE + NBC)" />
+              <Readout id="r-ca" k="carbonic anhydrase, net" />
               <Readout id="r-bath" k="the bath" />
               <Readout id="r-na" k="Na⁺ inside" cls="ion-na" />
               <Readout id="r-time" k="time" />
@@ -182,6 +186,10 @@ export default function Protons() {
             Cl⁻), NHE and NBC then bring pHi back to 7.0 over a few hours as HCO₃⁻ builds inside to 25 mM: the classic recovery. With CO₂
             alone, pHo falls to 7.0 as well; the more acid bath drives more H⁺ in through the leak, and pHi keeps sliding to 6.67 instead of
             recovering. The outside pH sets the load the transporters must meet.</li>
+          <li><b>Carbonic anhydrase runs backward at rest.</b> The HCO₃⁻ that NBC brings in does not pile up: the enzyme turns it back into
+            CO₂, which leaves across the lipid, at exactly NBC's rate. A CO₂ step runs it forward in one burst (about 2.3 mM at once); then it
+            runs backward again, more weakly while pHo is held (some of NBC's HCO₃⁻ now stays, raising the stock inside) and more strongly
+            with CO₂ alone. The enzyme itself turns over about a million times a second each way; the stage shows only the net.</li>
           <li><b>Stopping the pump does not, by itself, acidify this cell.</b> NHE and NBC slow as the Na⁺ gradient fails, but the cell also
             depolarizes, which cuts the H⁺ leak about as much. The acidosis of ischemia comes from lactic acid made faster than it can be
             removed, which this model does not include.</li>
