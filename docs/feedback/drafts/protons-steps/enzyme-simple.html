@@ -1,0 +1,153 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Carbonic anhydrase, simple: mockup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--line:#2b3442;--text:#e6edf3;--muted:#9aa5b1;--h:#cc79a7;--hco3:#e69f00;--co2:#9aa5b1;--w:#56b4e9;--ok:#7fb069}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:900px;margin:0 auto;padding:12px 16px 40px}
+.banner{border:1px dashed var(--line);border-radius:10px;padding:6px 12px;color:var(--muted);font-size:13px;margin-bottom:10px}
+.banner b{color:var(--text)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+canvas{display:block;width:100%;border-radius:8px;background:#101826}
+.eq{font-size:24px;text-align:center;margin:2px 0 8px;color:var(--muted)}
+.eq span{border-radius:6px;padding:0 5px;transition:background .3s,color .3s}
+.eq span.on{color:var(--text);background:#2a3140}
+.eq .ca{font-size:14px;vertical-align:super}
+.cap{min-height:3em;margin-top:10px;font-size:18px;text-align:center}
+.key{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 18px;font-size:14px;color:var(--muted);margin-top:10px}
+.key i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.controls{display:flex;justify-content:center;gap:10px;margin-top:12px}
+button{font:inherit;font-size:15px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 14px;cursor:pointer}
+.below{max-width:720px;margin:18px auto 0}
+.src{color:var(--muted);font-size:13px}
+</style></head><body><main>
+<div class="banner"><b>Mockup for Tony: the simple start.</b> One carbonic anhydrase as a glob, after Domsic et al. 2008: the whole protein with its cleft (their Fig. 1a), CO₂ held on the oily green surface and HCO₃⁻ on the watery side (Fig. 4a), and a chain of waters on that side (Fig. 1). Molecules are drawn far larger than the protein would make them. The order is simplified: in the real enzyme the water is already on the zinc and gives up its H⁺ in a separate half of the cycle. The detailed version is <code>enzyme.html</code>, kept for later.</div>
+<div class="panel">
+  <div class="eq"><span id="q1">CO₂ + H₂O</span> <span id="q2">⇌<span class="ca"> CA</span></span> <span id="q3">H⁺ + HCO₃⁻</span></div>
+  <canvas id="c" height="520"></canvas>
+  <div class="cap" id="cap"></div>
+  <div class="key">
+    <span><i style="background:var(--co2)"></i>CO₂</span>
+    <span><i style="background:var(--w)"></i>water</span>
+    <span><i style="background:var(--hco3)"></i>HCO₃⁻</span>
+    <span><i style="background:var(--h)"></i>H⁺</span>
+    <span><i style="background:#c9ced6"></i>zinc</span>
+    <span><i style="background:#7fb069"></i>oily pocket</span>
+  </div>
+  <div class="controls"><button id="pause">Pause</button><button id="again">Again</button></div>
+</div>
+<section class="below">
+<p>Carbonic anhydrase holds a CO₂ and a water in its cleft, side by side, beside a zinc. It turns them into one HCO₃⁻ and one H⁺, lets them go, and is ready for the next pair: up to about a million times a second.</p>
+<p class="src">Domsic JF et al. (2008) Entrapment of carbon dioxide in the active site of carbonic anhydrase II. J Biol Chem 283:30766–30771. doi:10.1074/jbc.M805353200</p>
+</section>
+</main>
+<script>
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+const W = 800, H = 520;
+const C = { co2: "#9aa5b1", w: "#56b4e9", hco3: "#e69f00", h: "#cc79a7", hy: "#e6edf3", zn: "#c9ced6", oil: "#7fb069", prot: "#26303f", protEdge: "#46556b", sol: "#101826", text: "#e6edf3", muted: "#9aa5b1" };
+function fit() { const dpr = window.devicePixelRatio || 1, w = cv.clientWidth; cv.width = w * dpr; cv.height = w * (H / W) * dpr; cv.style.height = w * (H / W) + "px"; ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0); }
+const P = (x, y) => ({ x, y });
+const lerp = (a, b, t) => a + (b - a) * t;
+const lp = (a, b, t) => P(lerp(a.x, b.x, t), lerp(a.y, b.y, t));
+const ss = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+const seg = (t, a, b) => ss((t - a) / (b - a));
+const along = (pts, t) => { if (t <= 0) return pts[0]; if (t >= 1) return pts[pts.length - 1]; const n = pts.length - 1, f = t * n, i = Math.floor(f); return lp(pts[i], pts[i + 1], f - i); };
+const mixc = (a, b, t) => { const h = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)); const x = h(a), y = h(b); return "rgb(" + x.map((v, i) => Math.round(lerp(v, y[i], t))).join(",") + ")"; };
+function atom(p, r, fill, a = 1) { ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.283); ctx.fillStyle = fill; ctx.fill(); ctx.globalAlpha = 1; }
+function bond(a, b, color, w = 4, al = 1) { ctx.globalAlpha = al; ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.globalAlpha = 1; }
+function label(s, p, color = C.muted, size = 20, align = "center", a = 1) { ctx.globalAlpha = a; ctx.fillStyle = color; ctx.font = `${size}px system-ui,-apple-system,sans-serif`; ctx.textAlign = align; ctx.textBaseline = "middle"; ctx.fillText(s, p.x, p.y); ctx.globalAlpha = 1; }
+const add = (p, dx, dy) => P(p.x + dx, p.y + dy);
+
+// the protein: a glob with a cleft opening upward
+const CEN = P(400, 330);
+function globPath(squeeze) {
+  const p = new Path2D();
+  for (let k = 0; k <= 120; k++) {
+    const th = (k / 120) * 6.283, r = 1 + 0.04 * Math.sin(3 * th + 0.4) + 0.025 * Math.sin(5 * th + 1.3);
+    const x = CEN.x + 255 * r * Math.cos(th) * (1 - squeeze), y = CEN.y + 175 * r * Math.sin(th) * (1 + squeeze);
+    k ? p.lineTo(x, y) : p.moveTo(x, y);
+  }
+  p.closePath(); return p;
+}
+function cleftPath() { const p = new Path2D(); p.moveTo(290, 60); p.lineTo(510, 60); p.lineTo(452, 300); p.quadraticCurveTo(400, 352, 348, 300); p.closePath(); return p; }
+function glob(squeeze) {
+  const g = globPath(squeeze), c = cleftPath();
+  ctx.fillStyle = C.prot; ctx.fill(g); ctx.strokeStyle = C.protEdge; ctx.lineWidth = 3; ctx.stroke(g);
+  ctx.fillStyle = C.sol; ctx.fill(c);                                   // the cleft opens the glob at the top
+  ctx.save(); ctx.clip(g); ctx.strokeStyle = C.protEdge; ctx.lineWidth = 3; ctx.stroke(c); ctx.restore(); // its walls, inside the protein only
+  // the oily (hydrophobic) wall: right side of the cleft, as the green surface of Figs. 1a and 4a
+  ctx.save(); ctx.clip(g); ctx.strokeStyle = C.oil; ctx.globalAlpha = 0.55; ctx.lineWidth = 22; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(494, 150); ctx.lineTo(462, 292); ctx.stroke(); ctx.restore();
+}
+function zinc(glow) {
+  [[-26, 30], [0, 38], [26, 30]].forEach(([dx, dy]) => bond(P(400, 322), P(400 + dx, 322 + dy), "#5f6b7d", 6)); // three histidines, as stubs
+  if (glow > 0) { ctx.globalAlpha = glow * 0.5; ctx.beginPath(); ctx.arc(400, 322, 18 + 26 * glow, 0, 6.283); ctx.strokeStyle = C.hco3; ctx.lineWidth = 4; ctx.stroke(); ctx.globalAlpha = 1; }
+  const g = ctx.createRadialGradient(394, 316, 3, 400, 322, 20); g.addColorStop(0, "#f4f6f8"); g.addColorStop(1, "#7d8590");
+  ctx.beginPath(); ctx.arc(400, 322, 18, 0, 6.283); ctx.fillStyle = g; ctx.fill();
+}
+function water(o, a = 1, hs = [P(-8, -16), P(-17, 6)], hcol = [C.hy, C.hy]) { hs.forEach((d, i) => { const h = add(o, d.x, d.y); bond(o, h, "#c9ced6", 3, a); atom(h, 6, hcol[i], a); }); atom(o, 11, C.w, a); }
+function co2(c, a = 1) { const o1 = add(c, 4, -24), o2 = add(c, -4, 24); bond(o1, o2, C.co2, 6, a); atom(o1, 11, C.co2, a); atom(o2, 11, C.co2, a); atom(c, 8, "#7d8590", a); }
+
+// the solution's other molecules, drifting
+const amb = []; for (let k = 0; k < 9; k++) amb.push({ x: 40 + Math.random() * 720, y: 22 + Math.random() * 80, vx: (Math.random() - 0.5) * 14, vy: (Math.random() - 0.5) * 6, kind: k % 2 ? "w" : "c", ph: Math.random() * 6 });
+function drift(dt) {
+  amb.forEach((m) => { m.x += m.vx * dt; m.y += m.vy * dt; if (m.x < 20 || m.x > 780) m.vx *= -1; if (m.y < 18 || m.y > 104) m.vy *= -1; });
+  // stay out of the actors' way at the mouth
+  amb.forEach((m) => { ctx.save(); ctx.translate(m.x, m.y); ctx.scale(0.62, 0.62); m.kind === "c" ? co2(P(0, 0), 0.4) : water(P(0, 0), 0.4); ctx.restore(); });
+}
+
+// one turn: the timeline, in seconds
+const T = { arrive: 2.6, hold: 3.4, turn: 4.6, leave: 6.8, rest: 8.6, end: 9.4 };
+const CO2_IN = [P(640, 40), P(530, 110), P(450, 240)], W_IN = [P(170, 50), P(300, 100), P(368, 170), P(402, 288)];
+const CB = P(450, 240), OW = P(402, 288);          // bound: CO₂'s carbon against the oily wall; the water on the zinc
+const BOUND = { c: P(430, 264), o1: P(440, 236), o2: P(456, 280) }; // the HCO₃⁻ they make (the water's oxygen is the third)
+const HCO3_OUT = [P(0, 0), P(-30, -110), P(-90, -240)];             // HCO₃⁻ leaves by the mouth, on the watery side
+const WIRE = [P(350, 236), P(334, 182)];                            // the chain of waters on the watery wall (Fig. 1)
+const H_OUT = (h0) => [h0, add(WIRE[0], 0, -18), add(WIRE[1], 0, -18), P(296, 112), P(200, 56)];
+
+let t = 0, paused = false, last = performance.now();
+const q = ["q1", "q2", "q3"].map((id) => document.getElementById(id)), cap = document.getElementById("cap");
+function say(k, s) { q.forEach((e, i) => e.classList.toggle("on", i === k)); if (cap.dataset.k !== String(k) + s) { cap.innerHTML = s; cap.dataset.k = String(k) + s; } }
+
+function draw(dt) {
+  ctx.clearRect(0, 0, W, H);
+  label("the solution", P(30, 128), C.muted, 16, "left");
+  const turn = seg(t, T.hold, T.turn), pulse = Math.sin(Math.PI * turn);
+  glob(0.015 * pulse);
+  drift(dt);
+  WIRE.forEach((p) => water(p, 0.55));
+  zinc(pulse);
+  label("carbonic anhydrase", P(400, 470), C.text, 22);
+  label("oily pocket", P(560, 250), "#a9c98f", 18, "left");
+  label("zinc", P(440, 336), C.muted, 16, "left");
+
+  const arrive = seg(t, 0.2, T.arrive), leave = seg(t, T.turn + 0.2, T.leave), fade = 1 - seg(t, T.rest, T.end);
+  if (t < T.hold) {
+    // CO₂ and water come in and settle in their places
+    co2(along(CO2_IN, arrive)); water(along(W_IN, arrive));
+    say(0, t < T.arrive ? "CO₂ and a water drift into the cleft." : "CO₂ settles on the oily pocket; the water sits on the zinc.");
+  } else {
+    // the turnover: CO₂'s oxygens open to 120°, the water's oxygen bonds the carbon, one hydrogen leaves as H⁺
+    const k = turn, out = leave, dx = along(HCO3_OUT, out);
+    const c = lp(CB, BOUND.c, k), o1 = lp(add(CB, 4, -24), BOUND.o1, k), o2 = lp(add(CB, -4, 24), BOUND.o2, k);
+    const shift = (p) => add(p, dx.x, dx.y), col = mixc(C.co2, C.hco3, k), al = fade;
+    const ow = shift(OW), ha = shift(add(OW, -8, -16));
+    bond(ow, shift(c), C.hco3, 5, k * al); bond(shift(o1), shift(c), col, 5, al); bond(shift(o2), shift(c), col, 5, al); bond(ow, ha, "#c9ced6", 3, al);
+    atom(ha, 6, C.hy, al); atom(ow, 11, mixc(C.w, C.hco3, k), al); atom(shift(o1), 11, col, al); atom(shift(o2), 11, col, al); atom(shift(c), 8, mixc("#7d8590", "#b07400", k), al);
+    // the H⁺: off the water, out along the chain of waters
+    const h0 = add(OW, -17, 6), hp = along(H_OUT(h0), out);
+    if (k < 0.5) bond(OW, hp, "#c9ced6", 3, 1 - k * 2);
+    atom(hp, 7.5, mixc(C.hy, C.h, k), al);
+    if (k > 0.95) { label("HCO₃⁻", add(shift(c), 38, -6), C.hco3, 20, "left", al); label("H⁺", add(hp, -16, -16), C.h, 20, "right", al); }
+    if (t < T.turn) say(1, "The enzyme turns over: CO₂ and water become HCO₃⁻ and H⁺.");
+    else say(2, "HCO₃⁻ and H⁺ leave, and the enzyme is ready for the next pair: up to a million times a second.");
+  }
+}
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (!paused) { t += dt; if (t > T.end) t = 0; }
+  draw(paused ? 0 : dt);
+  requestAnimationFrame(frame);
+}
+document.getElementById("pause").onclick = (e) => { paused = !paused; e.target.textContent = paused ? "Play" : "Pause"; };
+document.getElementById("again").onclick = () => { t = 0; paused = false; document.getElementById("pause").textContent = "Pause"; };
+window.addEventListener("resize", fit); fit(); requestAnimationFrame(frame);
+</script></body></html>
