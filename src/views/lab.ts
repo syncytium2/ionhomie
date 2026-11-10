@@ -20,7 +20,7 @@ export class Lab {
   stage: CellStage;
   traceV?: Trace; traceC?: Trace; traceVol?: Trace; traceCa?: Trace;
   cell!: I.Cell; n!: I.Amounts; bath!: I.Bath; s!: I.Snapshot;
-  t = 0; running = false; vol0 = 1; pumpFull = 0; ref = 1;
+  t = 0; running = false; vol0 = 1; pumpFull = 0; ref = 1; ncxRef = 1;
   /** the pump is stopped by a drug with ATP still at hand (ouabain), not by a lack of ATP */
   pumpBlocked = false;
   private lastRec = -1e9;
@@ -76,6 +76,7 @@ export class Lab {
     this.vol0 = I.sphere(this.cell.radius).volume;
     this.pumpFull = this.cell.pump.imax;
     this.ref = I.snapshot(h.cell, h.n).pump;           // the healthy pump rate: the token scale
+    this.ncxRef = Math.abs(I.snapshot(h.cell, h.n).ncx) || 1; // the healthy NCX rate, for its rocking speed
     if (this.o.setup) this.o.setup(this.cell, this);
     this.running = this.o.autorun;
     for (const tr of [this.traceV, this.traceC, this.traceVol, this.traceCa]) tr?.clear();
@@ -95,7 +96,10 @@ export class Lab {
       const blocked = this.pumpBlocked;
       list.push({ kind: "pump", angle: Math.PI * 0.62, label: on ? "Na⁺/K⁺ pump" : blocked ? "pump: blocked (ouabain)" : "pump: no ATP", key: "pump", on, why: blocked ? "blocked" : "noatp" });
     }
-    if (this.o.ca) list.push({ kind: "pmca", angle: Math.PI, label: "PMCA", key: "pmca", on: this.cell.pmca.on });
+    if (this.o.ca) {
+      list.push({ kind: "pmca", angle: Math.PI, label: "PMCA", key: "pmca", on: this.cell.pmca.on });
+      list.push({ kind: "ncx", angle: Math.PI * 1.3, label: this.ncxLabel(), key: "ncx", on: this.cell.ncx.on });
+    }
     if (this.o.ccc) {
       list.push({ kind: "nkcc1", angle: Math.PI * 0.95, label: "NKCC1", key: "nkcc1", on: this.cell.nkcc1 > 0 });
       list.push({ kind: "kcc2", angle: Math.PI * 1.28, label: "KCC2", key: "kcc2", on: this.cell.kcc2 > 0 });
@@ -103,6 +107,13 @@ export class Lab {
     const phases = new Map(this.stage.pathways.map((p) => [p.key, p.phase]));
     for (const p of list) p.phase = phases.get(p.key) ?? 0;
     this.stage.setPathways(list);
+  }
+
+  /** NCX's label says which way it runs: forward (Ca²⁺ out) at rest, reversed (Ca²⁺ in) once the Na⁺ gradient fails. */
+  ncxLabel() {
+    if (!this.cell.ncx.on) return "NCX: stopped";
+    const r = this.s ? this.s.ncx : 1;
+    return r >= 0 ? "NCX: Ca²⁺ out" : "NCX reversed: Ca²⁺ in";
   }
 
   resnap() { this.s = I.snapshot(this.cell, this.n, this.bath, this.extra()); }
@@ -169,6 +180,7 @@ export class Lab {
     for (const p of pw) {
       if (p.key === "pump") p.phase = (p.phase || 0) + dt * 3 * (s.pump / this.ref) * (this.running ? 1 : 0.2);
       if (p.key === "pmca") p.phase = (p.phase || 0) + dt * 2 * (s.pmca > 0 ? 1 : 0);
+      if (p.key === "ncx") { p.phase = (p.phase || 0) + dt * 2 * Math.min(3, Math.abs(s.ncx) / this.ncxRef); p.label = this.ncxLabel(); }
     }
   }
 

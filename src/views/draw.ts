@@ -494,7 +494,7 @@ const FOCUS_HAZE = 1400; // above this many dots on a side, the focus view draws
 const NA = 6.02214076e23;
 
 export interface Pathway {
-  kind: "channel" | "pump" | "pmca" | "nkcc1" | "kcc2";
+  kind: "channel" | "pump" | "pmca" | "nkcc1" | "kcc2" | "ncx";
   angle: number; ions?: Species[]; open?: boolean; on?: boolean; label?: string; key?: string;
   /** why a pump is stopped: no ATP at all (rundown, ischemia), or blocked with ATP still at hand (ouabain) */
   why?: "noatp" | "blocked";
@@ -1192,6 +1192,7 @@ export class CellStage {
     if (pw.kind === "pump") return (pr ? pr.o : -1) < 0 ? ["Na", "Na", "Na"] : ["K", "K"];
     if (pw.kind === "nkcc1") return ["Na", "K", "Cl", "Cl"];
     if (pw.kind === "kcc2") return ["K", "Cl"];
+    if (pw.kind === "ncx") return ["Na", "Na", "Na", "Ca"];
     return ["Ca"];
   }
   private drawPathway(ctx: CanvasRenderingContext2D, g: ReturnType<CellStage["geometry"]>, pw: Pathway) {
@@ -1211,8 +1212,9 @@ export class CellStage {
       // a transport protein: a body with a binding cleft that opens to one face (docs/adr/0017)
       const p = this.pathways.indexOf(pw), pr = this.protein(p); // PMCA too, so its ATP is drawn
       let o = pr ? pr.o : 1;
-      if (pw.kind === "pmca") o = pw.on === false ? 0 : Math.sin(pw.phase || 0); // no Ca²⁺ dots to carry: it rocks at its rate
-      const fill = pw.on === false ? STAGE.off : pw.kind === "pump" ? STAGE.pump : pw.kind === "pmca" ? cssVar("--ca") : pw.kind === "nkcc1" ? STAGE.nkcc1 : STAGE.kcc2;
+      // no Ca²⁺ dots to carry (0.1 µM is too dilute to draw): PMCA and NCX rock at their rates
+      if (pw.kind === "pmca" || pw.kind === "ncx") o = pw.on === false ? 0 : Math.sin(pw.phase || 0);
+      const fill = pw.on === false ? STAGE.off : pw.kind === "pump" ? STAGE.pump : pw.kind === "pmca" ? cssVar("--ca") : pw.kind === "nkcc1" ? STAGE.nkcc1 : pw.kind === "ncx" ? STAGE.ncx : STAGE.kcc2;
       ctx.rotate(o * 0.16);
       const atpase = pw.kind === "pump" || pw.kind === "pmca";
       ctx.fillStyle = fill;

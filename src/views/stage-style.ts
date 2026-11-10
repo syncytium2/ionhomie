@@ -20,6 +20,7 @@ export const STAGE = {
   // labels and binding rings tell them apart, and the pump's lavender, ATP domain and ATP set it apart from both
   nkcc1: "#8e9aaf",
   kcc2: "#8e9aaf",
+  ncx: "#8e9aaf", // the Na⁺/Ca²⁺ exchanger is a transporter too: the same gray, no ATP site
   membraneWidth: 8, // px, drawn at 0.9 opacity
   dotR: 2.8, // a bulk dot (cations' and anions' size parameter)
   aR: 3.4, // an A⁻ dot
