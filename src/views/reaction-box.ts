@@ -26,6 +26,12 @@ export class ReactionBox {
   conv = 0; // net converted forward since the last change, mM
   fwdTot = 0; backTot = 0; // each direction's running total, mM: both climb at equilibrium
   thin = 1;
+  /** Model seconds per real second: 1 is real time; the enzyme step's slider slows it to 1/10,000 (the factor is always shown). */
+  timeScale = 1;
+  /** At most this many conversions shown per real second each way, thinned alike beyond it. 2.5 calmly; higher for the enzyme step,
+   *  where the flicker of a fast reaction is the point (Tony: "make it run much faster, so the user has to drag a slider to slow it down"). */
+  maxShown = 2.5;
+  private dur = 0.9; // how long one shown conversion takes, real seconds: shorter when many are shown
   private tilt = 0; // the seesaw's shown tilt, in decades of forward ÷ backward, eased so a blip is visible
   private dots: Dot[] = [];
   private events: Ev[] = [];
@@ -55,13 +61,14 @@ export class ReactionBox {
     this.tally();
   }
 
-  frame(dt: number) {
+  frame(dtReal: number) {
+    const dt = dtReal * this.timeScale; // the model's time; the dots' motion stays in real time (depiction only)
     const dx = R.relax(this.box, dt, this.ca);
     this.t += dt; this.conv += dx;
     const r = R.rates(this.box, this.ca);
     this.fwdTot += r.f * dt; this.backTot += r.b * dt;
-    this.stepEvents(dt, r);
-    this.draw(dt, r);
+    this.stepEvents(dtReal, dt, r);
+    this.draw(dtReal, r);
   }
 
   private launch(kind: "CO2" | "HCO3") {
@@ -72,20 +79,22 @@ export class ReactionBox {
     d.busy = true;
     this.events.push({ d, fwd: kind === "CO2", t: 0, hx: Math.cos(a) * 26, hy: Math.sin(a) * 26 });
   }
-  private stepEvents(dt: number, r: { f: number; b: number }) {
-    const fr = r.f / PER_DOT, br = r.b / PER_DOT;
-    this.thin = Math.max(1, Math.max(fr, br) / 2.5); // at most a few a second, both ways thinned alike
+  private stepEvents(dt: number, dtModel: number, r: { f: number; b: number }) {
+    const fr = (r.f * this.timeScale) / PER_DOT, br = (r.b * this.timeScale) / PER_DOT; // dots per real second
+    this.thin = Math.max(1, Math.max(fr, br) / this.maxShown); // both ways thinned alike
+    const shown = Math.max(fr, br) / this.thin;
+    this.dur = Math.max(0.12, Math.min(0.9, (0.9 * 2.5) / Math.max(2.5, shown))); // quicker conversions when many are shown
     this.acc.f += (fr / this.thin) * dt; this.acc.b += (br / this.thin) * dt;
     while (this.acc.f >= 1) { this.acc.f -= 1; this.launch("CO2"); }
     while (this.acc.b >= 1) { this.acc.b -= 1; this.launch("HCO3"); }
     for (const e of this.events) {
-      e.t += dt / 0.9;
+      e.t += dt / this.dur;
       if (e.t >= 0.5 && !e.swapped) { e.swapped = true; e.d.k = e.fwd ? "HCO3" : "CO2"; }
       if (e.t >= 1) e.d.busy = false;
     }
     this.events = this.events.filter((e) => e.t < 1);
     const tagged = this.dots.find((d) => d.tag);
-    if (tagged) { this.tagTime += dt; if (tagged.k === "HCO3") this.tagAsHCO3 += dt; }
+    if (tagged) { this.tagTime += dtModel; if (tagged.k === "HCO3") this.tagAsHCO3 += dtModel; }
   }
   private syncDots(bx: { x: number; y: number; w: number; h: number }) {
     const want: Record<Kind, number> = { CO2: Math.round(this.box.co2 / PER_DOT), HCO3: Math.round(this.box.hco3 / PER_DOT), A: this.box.buffered ? R.BUFFER.total : 0 };
@@ -146,6 +155,7 @@ export class ReactionBox {
     const freeNm = R.freeH(this.box) * 1e6;
     tag(narrow ? `free H⁺ ${freeNm.toFixed(0)} nM: too few to draw` : `free H⁺: ${freeNm.toFixed(0)} nM, far too few to draw at this scale`, bx.x + 8, bx.y + 14, cssVar("--h"), undefined, true);
     tag(this.thin > 1.5 ? `conversions shown: 1 in ${Math.round(this.thin).toLocaleString("en-US")}, both ways alike` : "every conversion shown", bx.x + 8, bx.y + 34, acc, undefined, true);
+    if (this.timeScale < 0.999) tag(`slow motion: time runs at 1/${Math.round(1 / this.timeScale).toLocaleString("en-US")} of real time`, bx.x + 8, bx.y + 54, cssVar("--text"), "600 12px system-ui, sans-serif", true);
     tag(`each ring or triangle ≈ ${PER_DOT} mM${this.box.buffered ? (narrow ? "; blob ≈ 1 mM buffer" : "; each blob ≈ 1 mM of buffer, with an H⁺ when it holds one") : ""}`, bx.x + 8, bx.y + bx.h - 12, muted, undefined, true);
 
     // the equation term by term, each term's glyph beneath it (water: the solvent, never drawn as dots)
@@ -162,6 +172,9 @@ export class ReactionBox {
         c.moveTo(cx, gy - 7); c.quadraticCurveTo(cx + 7, gy + 2, cx, gy + 6); c.quadraticCurveTo(cx - 7, gy + 2, cx, gy - 7); c.stroke();
         c.font = "11px system-ui, sans-serif"; c.fillStyle = muted; c.textAlign = "center"; c.fillText("the solvent", cx, gy + 17);
       } else if (sy) glyph(c, sy, cx, gy, 6);
+      else if (s.includes("⇌") && this.ca > 1) { // the enzyme, over the arrows
+        c.font = `700 ${Math.round(fs * 0.5)}px system-ui, sans-serif`; c.fillStyle = acc; c.textAlign = "center"; c.fillText("CA", cx, ey - fs * 0.8);
+      }
       tx += widths[i];
     });
     // the seesaw: which way it runs. The side converting faster is the heavier side, and tips down.

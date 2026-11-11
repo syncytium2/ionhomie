@@ -65,3 +65,4 @@ change so the two never disagree.
 | [0027](0027-the-protons-page-steps-through-its-players.md) | The protons page steps through its players | Accepted in part (Tony chose the steps and default; the forms are proposed) |
 | [0028](0028-the-step-through-opens-on-the-enzyme.md) | The step-through opens on the enzyme, simply | Accepted (Tony asked for a simple glob, both directions, then "build"; the forms are Claude's) |
 | [0029](0029-a-seesaw-and-two-dials-the-numbers-folded.md) | The reaction box shows a seesaw and two dials, its numbers folded; the whole cell regrouped | Accepted (Tony asked for the seesaw, dials and folded table, and the phone hint; the forms are Claude's) |
+| [0030](0030-the-protons-page-opens-on-the-reaction-then-adds-the-enzyme.md) | The protons page opens on the reaction, then adds the enzyme with a slow-motion slider | Accepted (Tony) |

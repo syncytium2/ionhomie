@@ -31,7 +31,7 @@ const ROUTES = {
   pumps: [["click", "#run", 2500], ["click", "#ouabain", 3000]],
   chloride: [["click", "#preset-nkcc1", 4000]],
   // the page opens on its step-through (docs/adr/0027, 0028); the skip leads to the whole cell, which the ion checks need
-  protons: [["click", "#bwd", 2500], ["click", "#skip", 800], ["click", "#co2-held", 3000], ["click", "#both", 6000]],
+  protons: [["click", "#add-co2", 1500], ["click", "#skip", 800], ["click", "#co2-held", 3000], ["click", "#both", 6000]],
   homeostat: [["click", "#run", 7000]], // untouched at 100×, the cell runs down: this captures the collapse scene
 };
 
@@ -123,8 +123,12 @@ for (const [label, viewport] of [["desktop", { width: 1280, height: 900 }], ["ph
   page.on("pageerror", (e) => problems.push(`protons steps [${label}] pageerror: ${e.message}`));
   await page.goto(`${ORIGIN}/#/protons`);
   await page.waitForTimeout(400);
-  for (const [name, act] of [["enzyme", async () => { await page.waitForTimeout(3600); }],
-                             ["reaction", async () => { await page.click("#next"); await page.click("#add-co2"); await page.waitForTimeout(2500); }],
+  // the order (docs/adr/0030): the reaction, the enzyme added (slow motion dragged to 1/1,000), the enzyme up close, buffers, the cell
+  const slowTo = async (v) => { await page.evaluate((v) => { const e = document.getElementById("slow"); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(e, String(v)); e.dispatchEvent(new Event("input", { bubbles: true })); }, v); };
+  for (const [name, act] of [["reaction", async () => { await page.click("#add-co2"); await page.waitForTimeout(2500); }],
+                             ["ca", async () => { await page.click("#next"); await page.waitForTimeout(1200); await slowTo(3); await page.waitForTimeout(2500);
+                               const o = await page.textContent("#slow-o"); if (!o?.includes("1/1,000")) problems.push(`protons step ca [${label}] slow motion reads "${o}", not 1/1,000`); }],
+                             ["enzyme", async () => { await page.click("#next"); await page.waitForTimeout(3600); }],
                              ["buffers", async () => { await page.click("#next"); await page.click("#add-co2"); await page.waitForTimeout(2500); }],
                              ["whole", async () => { await page.click("#next"); await page.waitForTimeout(1500); }]]) {
     try { await act(); } catch (e) { problems.push(`protons steps [${label}] could not reach ${name}: ${e.message.split("\n")[0]}`); }

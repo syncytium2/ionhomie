@@ -12,8 +12,8 @@ import { Clock } from "./Rundown.tsx";
 
 // The protons page (docs/adr/0022): the shared cell, whose pH NHE1 and NBC hold far from equilibrium. Two ways to see it:
 // Siesjö's figure (Vm held at −60 mV by a clamp) or the cell as every other chapter runs it (Vm free, near −80 mV).
-// It opens as a step-through (docs/adr/0027, 0028): the enzyme, the reaction in a box, buffers and the enzyme's speed,
-// then the whole cell. "Skip to the whole cell" goes straight there, and #/protons/whole links to it.
+// It opens as a step-through (docs/adr/0027, 0028, 0030): the reaction in a box, the enzyme added (with a slow-motion
+// slider), the enzyme up close, buffers and the enzyme's speed, then the whole cell. "Skip to the whole cell" goes straight there, and #/protons/whole links to it.
 type Mode = "siesjo" | "cell";
 const ANGLE = ACID_ANGLE;
 
@@ -245,8 +245,9 @@ function OnThisPage() {
 
 // ---------- the step-through (docs/adr/0027, 0028) ----------
 const STEPS = [
-  { id: "enzyme", name: "The enzyme" },
   { id: "reaction", name: "The reaction" },
+  { id: "ca", name: "Add the enzyme" },
+  { id: "enzyme", name: "The enzyme up close" },
   { id: "buffers", name: "Buffers, and the enzyme's speed" },
   { id: "whole", name: "The whole cell" },
 ] as const;
@@ -322,7 +323,7 @@ function EnzymeStep({ bar }: { bar: ReactNode }) {
         <div className="predict"><b>Predict.</b> Press <b>Backward</b>. Is anything different about the enzyme when it runs the other way? Then
           ask: what decides which way it runs?</div>
         <p>The enzyme has no direction of its own. Run backward, it does the same steps in reverse: HCO₃⁻ and H⁺ go in, CO₂ and water come
-          out. Which way it runs depends on what reaches it, which is the next step's subject.</p>
+          out. Which way it runs depends on what reaches it: in the box, on how far the concentrations sit from equilibrium.</p>
         <details>
           <summary>What the picture is, and what it leaves out</summary>
           <p>One molecule of carbonic anhydrase II, drawn as a glob with its cleft, after Domsic et al. (2008): the whole protein (their Fig. 1a),
@@ -341,12 +342,19 @@ function EnzymeStep({ bar }: { bar: ReactNode }) {
 
 const BUFFER_KEY: KeyExtra = { draw: (ctx, x, y) => glyph(ctx, "A", x, y, 4), text: "a buffer, about 1 mM per blob", note: "a pink dot on it: the H⁺ it holds" };
 
-function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
+/** Slow motion, as a slider: 0 is real time, 4 is 1/10,000 of it (a log scale, so each notch is tenfold). */
+const SLOW_STEPS = 4;
+const slowLabel = (v: number) => (v <= 0 ? "real time" : `1/${Math.round(10 ** v).toLocaleString("en-US")} of real time`);
+
+function ReactionStep({ buffers, enzyme = buffers, bar }: { buffers: boolean; enzyme?: boolean; bar: ReactNode }) {
   const [buffered, setBuffered] = useState(buffers);
+  const [slow, setSlow] = useState(0);
+  const caStep = enzyme && !buffers; // the step that adds the enzyme to plain solution, with the slow-motion slider
   const box = useRef<ReactionBox | null>(null);
   useEffect(() => {
-    const b = new ReactionBox($<HTMLCanvasElement>("box"), buffers, buffers);
-    b.ca = buffers ? R.CA_CELL : 1;
+    const b = new ReactionBox($<HTMLCanvasElement>("box"), buffers, enzyme);
+    b.ca = enzyme ? R.CA_CELL : 1;
+    if (caStep) b.maxShown = 30; // the fast reaction shows as a flicker; the slider slows it to single conversions
     box.current = b;
     const mm = (v: number) => (Math.abs(v) < 0.001 ? (v * 1e6).toFixed(0) + " nM" : v.toFixed(3) + " mM");
     return loop((dt) => {
@@ -359,7 +367,7 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
       setText("n-net", (b.conv >= 0 ? "+" : "−") + mm(Math.abs(b.conv)));
       setText("n-fol", fol === null ? "—" : Math.round(100 * fol) + "%"); setText("n-t", b.t.toFixed(1) + " s");
     });
-  }, [buffers]);
+  }, [buffers, enzyme]);
   return (
     <main>
       <div className="panel">
@@ -369,6 +377,8 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
           <button id="add-co2" onClick={() => box.current?.add("co2")}>Add CO₂ (+1 mM)</button>
           <button id="add-acid" onClick={() => box.current?.add("acid")}>Add acid (+1 mM H⁺)</button>
           <button id="add-hco3" onClick={() => box.current?.add("hco3")}>Add HCO₃⁻ (+5 mM)</button>
+          {caStep && <label>Slow motion <input type="range" id="slow" min="0" max={SLOW_STEPS} step="0.05" value={slow}
+            onChange={(e) => { const v = +e.target.value; setSlow(v); if (box.current) box.current.timeScale = 10 ** -v; }} /><output id="slow-o">{slowLabel(slow)}</output></label>}
           {buffers && <button id="buffer" className={buffered ? "on" : ""} aria-pressed={buffered}
             onClick={() => { const on = !buffered; box.current?.setBuffered(on); setBuffered(on); }}>{buffered ? "Buffer: on" : "Buffer: off"}</button>}
           {buffers && <label>Carbonic anhydrase <select id="ca" defaultValue={String(R.CA_CELL)} onChange={(e) => { if (box.current) { box.current.ca = +e.target.value; box.current.tally(); } }}>
@@ -394,7 +404,24 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
         </details>
         {bar}
       </div>
-      <Below>{buffers ? <>
+      <Below>{caStep ? <>
+        <p className="lede">Now add the enzyme, carbonic anhydrase. It is the same reaction, the same box and the same equilibrium, but each
+          direction now runs ten thousand times faster. The CO₂ rings flicker into HCO₃⁻ triangles and back too fast to follow, and the dials
+          have both swung up together.</p>
+        <div className="predict"><b>Predict.</b> Has the seesaw moved? Will the box end up with more HCO₃⁻ than before, or less? Then drag
+          <b> Slow motion</b> until you can watch single conversions again. How far do you have to slow time?</div>
+        <p><b>The seesaw stays level.</b> The enzyme speeds the forward and backward reactions by the same factor, so their ratio, and with it
+          where the reaction settles, does not change. More happens each second; nothing changes.</p>
+        <p><b>To see it, slow time down</b>, by about ten thousand, to 1/10,000 of real time. Then the box looks as it did without the enzyme at
+          real time: the enzyme has compressed hours of conversions into seconds. A CO₂ molecule that would wait about 8 s to convert in plain
+          water waits under a millisecond here.</p>
+        <p>What the enzyme cannot do in plain solution is move much: add CO₂ and only a few nanomolar of it converts, with or without the enzyme,
+          because the H⁺ it makes has nowhere to go. That waits for the buffers, two steps on. Next, the enzyme up close: what one molecule of it
+          does.</p>
+        <details><summary>The model, and what it does not claim</summary><BoxModel /><p>Slow motion slows the model's clock only; the dots'
+          drifting stays at real speed, as a picture. At real time the box shows at most about 30 conversions a second each way, thinned alike
+          and labeled; slowed enough, it shows every one.</p></details>
+      </> : buffers ? <>
         <p className="lede">Buffers take up H⁺. Proteins, phosphates and other weak acids inside a cell bind most of any H⁺ that appears, so pH moves
           far less than the acid added would suggest.</p>
         <div className="predict"><b>Predict.</b> With the buffer on, add CO₂. How much HCO₃⁻ do you get this time, and how far does pH fall? Then set
@@ -409,8 +436,8 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
           from equilibrium.</p>
         <details><summary>The model, and what it does not claim</summary><BoxModel /></details>
       </> : <>
-        <p className="lede">The same reaction without the enzyme, in a box of plain solution. CO₂ and water make H⁺ and HCO₃⁻, and H⁺ and HCO₃⁻ make CO₂
-          and water, all the time. At equilibrium the two run equally fast, so nothing changes, though plenty is happening: watch the box, where CO₂
+        <p className="lede">The reaction on its own, in a box of plain solution: no enzyme, no buffer, no cell. CO₂ and water make H⁺ and HCO₃⁻, and
+          H⁺ and HCO₃⁻ make CO₂ and water, all the time. At equilibrium the two run equally fast, so nothing changes, though plenty is happening: watch the box, where CO₂
           rings become HCO₃⁻ triangles and back as often as each other. The seesaw stays level, and both dials read the same, well above zero.</p>
         <div className="predict"><b>Predict.</b> Add acid. Which way does the seesaw tip, which way does the reaction run, and where does the H⁺
           go? Then add CO₂. How much becomes HCO₃⁻?</div>
@@ -420,7 +447,7 @@ function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
         <p><b>Which way it runs depends on the concentrations.</b> Add acid and it runs back: the H⁺ meets HCO₃⁻ and leaves as CO₂, so almost all the
           acid disappears. That is bicarbonate acting as a buffer. Add HCO₃⁻ and it runs back too; add CO₂ and it runs forward.</p>
         <p><b>But adding CO₂ makes surprisingly little HCO₃⁻ here</b>: about 33 nM, while pH falls from 7.40 to 7.14. The H⁺ it would make has
-          nowhere to go, so a few nanomolar is enough to reach equilibrium, in well under a millisecond. That is the next step.</p>
+          nowhere to go, so a few nanomolar is enough to reach equilibrium. The buffers step comes back to that. Next: the enzyme.</p>
         <details><summary>The model, and what it does not claim</summary><BoxModel /></details>
       </>}</Below>
     </main>
@@ -449,6 +476,7 @@ export default function Protons() {
   const id = STEPS[i].id;
   if (id === "enzyme") return <EnzymeStep bar={bar} />;
   if (id === "reaction") return <ReactionStep key="reaction" buffers={false} bar={bar} />;
+  if (id === "ca") return <ReactionStep key="ca" buffers={false} enzyme bar={bar} />;
   if (id === "buffers") return <ReactionStep key="buffers" buffers bar={bar} />;
   return <WholeCell bar={bar} />;
 }

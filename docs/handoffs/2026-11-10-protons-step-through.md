@@ -96,6 +96,10 @@ equilibrium seen from inside the catalyst. Put it to Tony as a mockup, as the fi
 
 ## Paused, 2026-11-10 evening: combining the reaction and buffers steps (Tony still thinking; do not act yet)
 
+**Settled 2026-11-11** by [ADR-0030](../adr/0030-the-protons-page-opens-on-the-reaction-then-adds-the-enzyme.md): Tony chose a different path from the
+one below. The page opens on the reaction (no enzyme), then adds the enzyme at full speed with a slow-motion slider, then shows the
+enzyme up close, then buffers, then the cell. The discussion below is kept for its reasoning.
+
 Since this handoff: v0.1.12 put the step-through live (ADR-0028: the enzyme, the reaction, buffers and the enzyme's speed, the
 whole cell; `#/protons/whole` skips to the cell), and v0.1.13 replaced the box's arrows and table with a seesaw and two
 speedometer dials, folded the numbers, and regrouped the whole cell (ADR-0029). Both are merged and pushed.
