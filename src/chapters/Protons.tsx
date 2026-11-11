@@ -4,6 +4,7 @@ import * as P from "../core/protons.ts";
 import * as R from "../core/reaction.ts";
 import { $, Trace, fmtMv, gauges, glyph, loop, ruler, setText, viewPref, type KeyExtra } from "../views/draw.ts";
 import { EnzymeView } from "../views/enzyme-view.ts";
+import { PairView } from "../views/pair-view.ts";
 import { ReactionBox } from "../views/reaction-box.ts";
 import { ACID_ANGLE, Lab } from "../views/lab.ts";
 import { CA_KEY, CaView, bufferLedger, overlay, phGauge } from "../views/protons-views.ts";
@@ -12,8 +13,9 @@ import { Clock } from "./Rundown.tsx";
 
 // The protons page (docs/adr/0022): the shared cell, whose pH NHE1 and NBC hold far from equilibrium. Two ways to see it:
 // Siesjö's figure (Vm held at −60 mV by a clamp) or the cell as every other chapter runs it (Vm free, near −80 mV).
-// It opens as a step-through (docs/adr/0027, 0028, 0030): the reaction in a box, the enzyme added (with a slow-motion
-// slider), the enzyme up close, buffers and the enzyme's speed, then the whole cell. "Skip to the whole cell" goes straight there, and #/protons/whole links to it.
+// It opens as a step-through (docs/adr/0027, 0028, 0030, 0031): one H⁺ and one HCO₃⁻ combining and reversing, the same pair
+// with the enzyme (a blur, with a slow-motion slider), many at once in a box (mass action), the enzyme up close with its zinc,
+// buffers and the enzyme's speed, then the whole cell. "Skip to the whole cell" goes straight there, and #/protons/whole links to it.
 type Mode = "siesjo" | "cell";
 const ANGLE = ACID_ANGLE;
 
@@ -243,10 +245,11 @@ function OnThisPage() {
   );
 }
 
-// ---------- the step-through (docs/adr/0027, 0028) ----------
+// ---------- the step-through (docs/adr/0027, 0028, 0030, 0031) ----------
 const STEPS = [
-  { id: "reaction", name: "The reaction" },
+  { id: "pair", name: "One H⁺ meets one HCO₃⁻" },
   { id: "ca", name: "Add the enzyme" },
+  { id: "reaction", name: "Many at once: mass action" },
   { id: "enzyme", name: "The enzyme up close" },
   { id: "buffers", name: "Buffers, and the enzyme's speed" },
   { id: "whole", name: "The whole cell" },
@@ -268,11 +271,11 @@ function StepBar({ i, go }: { i: number; go: (i: number) => void }) {
 }
 
 /** The equation over the enzyme and the box, with CA over its arrows; part lights the side that is happening. */
-function Equation({ part }: { part: number }) {
+function Equation({ part, ca = true }: { part: number; ca?: boolean }) {
   const on = (k: number) => (part === k ? "on" : "");
   return (
-    <div className="eqhead" aria-label="CO₂ plus H₂O, reversibly, by carbonic anhydrase, H⁺ plus HCO₃⁻">
-      <span className={on(0)}>CO₂ + H₂O</span> <span className={"arrow " + on(1)}><span className="ca">CA</span>⇌</span> <span className={on(2)}>H⁺ + HCO₃⁻</span>
+    <div className="eqhead" aria-label={`CO₂ plus H₂O, reversibly${ca ? ", by carbonic anhydrase," : ""} H⁺ plus HCO₃⁻`}>
+      <span className={on(0)}>CO₂ + H₂O</span> <span className={"arrow " + on(1)}>{ca && <span className="ca">CA</span>}⇌</span> <span className={on(2)}>H⁺ + HCO₃⁻</span>
     </div>
   );
 }
@@ -346,15 +349,67 @@ const BUFFER_KEY: KeyExtra = { draw: (ctx, x, y) => glyph(ctx, "A", x, y, 4), te
 const SLOW_STEPS = 4;
 const slowLabel = (v: number) => (v <= 0 ? "real time" : `1/${Math.round(10 ** v).toLocaleString("en-US")} of real time`);
 
-function ReactionStep({ buffers, enzyme = buffers, bar }: { buffers: boolean; enzyme?: boolean; bar: ReactNode }) {
+/** One H⁺ and one HCO₃⁻ (docs/adr/0031): they combine into CO₂ and water and reverse; with the enzyme, the same, as a blur. */
+function PairStep({ enzyme, bar }: { enzyme: boolean; bar: ReactNode }) {
+  const [part, setPart] = useState(2), [caption, setCaption] = useState("");
+  const [slow, setSlow] = useState(0), [paused, setPaused] = useState(false);
+  const view = useRef<PairView | null>(null);
+  useEffect(() => {
+    const v = new PairView($<HTMLCanvasElement>("pair"), enzyme, (p, text) => { setPart(p); setCaption(text); });
+    view.current = v;
+    return loop((dt) => v.frame(dt));
+  }, [enzyme]);
+  return (
+    <main>
+      <div className="panel">
+        <Equation part={part} ca={enzyme} />
+        <canvas id="pair" aria-label={enzyme ? "One H⁺ and one HCO₃⁻ on carbonic anhydrase, turning into CO₂ and water and back so fast they blur" : "One H⁺ and one HCO₃⁻ combine into CO₂ and water, then reverse"} />
+        <p className="caption" aria-live="polite">{caption}</p>
+        <div className="controls centered">
+          {enzyme && <label>Slow motion <input type="range" id="slow" min="0" max={SLOW_STEPS} step="0.05" value={slow}
+            onChange={(e) => { const s = +e.target.value; setSlow(s); if (view.current) view.current.timeScale = 10 ** -s; }} /><output id="slow-o">{slowLabel(slow)}</output></label>}
+          <button id="pause" onClick={() => { const p = !paused; if (view.current) view.current.paused = p; setPaused(p); }}>{paused ? "Play" : "Pause"}</button>
+          <button id="again" onClick={() => { view.current?.again(); setPaused(false); }}>Again</button>
+        </div>
+        {bar}
+      </div>
+      <Below>{enzyme ? <>
+        <p className="lede">Now add the enzyme, carbonic anhydrase. It is the same pair doing the same thing, but ten thousand times faster: the
+          H⁺ and HCO₃⁻ become CO₂ and water and back again so fast that all you see is a blur.</p>
+        <div className="predict"><b>Predict.</b> Drag <b>Slow motion</b> until you can follow the pair again. How far do you have to slow time? Does the
+          enzyme make the pair spend more of its time on one side?</div>
+        <p><b>To see it, slow time to 1/10,000.</b> Then it runs at the pace of the step before. The enzyme does not change what happens, or which way: it
+          speeds both directions by the same factor, so the pair spends the same share of its time on each side. It only makes everything happen sooner.</p>
+        <p>Next, many molecules at once, where what decides the direction shows: mass action.</p>
+        <details><summary>What the picture is, and what it leaves out</summary>
+          <p>The enzyme is drawn as a plain shape behind the pair; its working parts, with the zinc, come two steps on. The factor of 10,000 is the same
+            illustrative factor the box uses for the enzyme in a cell; the enzyme itself turns over up to about a million times a second. Slow motion slows
+            the clock; the blur is many moments of each frame layered together, as a camera's long exposure would show them.</p>
+        </details>
+      </> : <>
+        <p className="lede">One proton, H⁺, meets one bicarbonate, HCO₃⁻. They combine, and fall apart into a CO₂ and a water. A moment later the
+          reverse: the CO₂ and water make an H⁺ and an HCO₃⁻ again. Every atom is kept: the water takes the H⁺ and one of bicarbonate's oxygens, and CO₂
+          is what is left.</p>
+        <div className="predict"><b>Predict.</b> Is there a "right" direction for this reaction? What would make it go one way more than the other?</div>
+        <p>The equation above lights the side the pair is on. Both directions are the same reaction, written <b>⇌</b>: it runs either way.</p>
+        <details><summary>What the picture is, and what it leaves out</summary>
+          <p>An animation, not a model: the pace, a round trip every 4 seconds, is chosen to be watched. Real molecules in plain water react far less
+            often, and do not take turns: whether a pair combines or splits depends on what else is around, which the box two steps on shows. The middle
+            moment, with the H⁺ on the bicarbonate, is carbonic acid, H₂CO₃, which lasts only an instant. Water is drawn here as one molecule; in the
+            box it is the solvent and is not drawn at all.</p>
+        </details>
+      </>}</Below>
+    </main>
+  );
+}
+
+function ReactionStep({ buffers, bar }: { buffers: boolean; bar: ReactNode }) {
   const [buffered, setBuffered] = useState(buffers);
-  const [slow, setSlow] = useState(0);
-  const caStep = enzyme && !buffers; // the step that adds the enzyme to plain solution, with the slow-motion slider
+  const enzyme = buffers;
   const box = useRef<ReactionBox | null>(null);
   useEffect(() => {
     const b = new ReactionBox($<HTMLCanvasElement>("box"), buffers, enzyme);
     b.ca = enzyme ? R.CA_CELL : 1;
-    if (caStep) b.maxShown = 30; // the fast reaction shows as a flicker; the slider slows it to single conversions
     box.current = b;
     const mm = (v: number) => (Math.abs(v) < 0.001 ? (v * 1e6).toFixed(0) + " nM" : v.toFixed(3) + " mM");
     return loop((dt) => {
@@ -377,8 +432,6 @@ function ReactionStep({ buffers, enzyme = buffers, bar }: { buffers: boolean; en
           <button id="add-co2" onClick={() => box.current?.add("co2")}>Add CO₂ (+1 mM)</button>
           <button id="add-acid" onClick={() => box.current?.add("acid")}>Add acid (+1 mM H⁺)</button>
           <button id="add-hco3" onClick={() => box.current?.add("hco3")}>Add HCO₃⁻ (+5 mM)</button>
-          {caStep && <label>Slow motion <input type="range" id="slow" min="0" max={SLOW_STEPS} step="0.05" value={slow}
-            onChange={(e) => { const v = +e.target.value; setSlow(v); if (box.current) box.current.timeScale = 10 ** -v; }} /><output id="slow-o">{slowLabel(slow)}</output></label>}
           {buffers && <button id="buffer" className={buffered ? "on" : ""} aria-pressed={buffered}
             onClick={() => { const on = !buffered; box.current?.setBuffered(on); setBuffered(on); }}>{buffered ? "Buffer: on" : "Buffer: off"}</button>}
           {buffers && <label>Carbonic anhydrase <select id="ca" defaultValue={String(R.CA_CELL)} onChange={(e) => { if (box.current) { box.current.ca = +e.target.value; box.current.tally(); } }}>
@@ -404,24 +457,7 @@ function ReactionStep({ buffers, enzyme = buffers, bar }: { buffers: boolean; en
         </details>
         {bar}
       </div>
-      <Below>{caStep ? <>
-        <p className="lede">Now add the enzyme, carbonic anhydrase. It is the same reaction, the same box and the same equilibrium, but each
-          direction now runs ten thousand times faster. The CO₂ rings flicker into HCO₃⁻ triangles and back too fast to follow, and the dials
-          have both swung up together.</p>
-        <div className="predict"><b>Predict.</b> Has the seesaw moved? Will the box end up with more HCO₃⁻ than before, or less? Then drag
-          <b> Slow motion</b> until you can watch single conversions again. How far do you have to slow time?</div>
-        <p><b>The seesaw stays level.</b> The enzyme speeds the forward and backward reactions by the same factor, so their ratio, and with it
-          where the reaction settles, does not change. More happens each second; nothing changes.</p>
-        <p><b>To see it, slow time down</b>, by about ten thousand, to 1/10,000 of real time. Then the box looks as it did without the enzyme at
-          real time: the enzyme has compressed hours of conversions into seconds. A CO₂ molecule that would wait about 8 s to convert in plain
-          water waits under a millisecond here.</p>
-        <p>What the enzyme cannot do in plain solution is move much: add CO₂ and only a few nanomolar of it converts, with or without the enzyme,
-          because the H⁺ it makes has nowhere to go. That waits for the buffers, two steps on. Next, the enzyme up close: what one molecule of it
-          does.</p>
-        <details><summary>The model, and what it does not claim</summary><BoxModel /><p>Slow motion slows the model's clock only; the dots'
-          drifting stays at real speed, as a picture. At real time the box shows at most about 30 conversions a second each way, thinned alike
-          and labeled; slowed enough, it shows every one.</p></details>
-      </> : buffers ? <>
+      <Below>{buffers ? <>
         <p className="lede">Buffers take up H⁺. Proteins, phosphates and other weak acids inside a cell bind most of any H⁺ that appears, so pH moves
           far less than the acid added would suggest.</p>
         <div className="predict"><b>Predict.</b> With the buffer on, add CO₂. How much HCO₃⁻ do you get this time, and how far does pH fall? Then set
@@ -436,18 +472,23 @@ function ReactionStep({ buffers, enzyme = buffers, bar }: { buffers: boolean; en
           from equilibrium.</p>
         <details><summary>The model, and what it does not claim</summary><BoxModel /></details>
       </> : <>
-        <p className="lede">The reaction on its own, in a box of plain solution: no enzyme, no buffer, no cell. CO₂ and water make H⁺ and HCO₃⁻, and
-          H⁺ and HCO₃⁻ make CO₂ and water, all the time. At equilibrium the two run equally fast, so nothing changes, though plenty is happening: watch the box, where CO₂
+        <p className="lede">Now many molecules at once, in a box of plain solution: no buffer, no cell, and no enzyme, so each conversion is slow
+          enough to watch. Every pair does what the one pair did: CO₂ and water make H⁺ and HCO₃⁻, and H⁺ and HCO₃⁻ make CO₂ and water, all the time. At equilibrium the two run equally fast, so nothing changes, though plenty is happening: watch the box, where CO₂
           rings become HCO₃⁻ triangles and back as often as each other. The seesaw stays level, and both dials read the same, well above zero.</p>
         <div className="predict"><b>Predict.</b> Add acid. Which way does the seesaw tip, which way does the reaction run, and where does the H⁺
           go? Then add CO₂. How much becomes HCO₃⁻?</div>
+        <p><b>This is mass action.</b> Each direction runs at a rate set by how much there is of what it starts from: forward by the CO₂, backward
+          by the H⁺ and HCO₃⁻ together. Add more of one side and that side converts faster, until the two rates match again. The seesaw shows the
+          ratio of the two, and the dials show each.</p>
         <p>Follow the one marked carbon: it keeps changing form, and spends most of its time as HCO₃⁻, simply because there is twenty times more HCO₃⁻
           than CO₂. Water is the solvent itself (pure water is 55 mol per liter), so it never runs short and is never drawn as dots: the box is
           water. For the same reason it is left out of the equilibrium constant, which counts water's activity, about 1 in a dilute solution.</p>
         <p><b>Which way it runs depends on the concentrations.</b> Add acid and it runs back: the H⁺ meets HCO₃⁻ and leaves as CO₂, so almost all the
           acid disappears. That is bicarbonate acting as a buffer. Add HCO₃⁻ and it runs back too; add CO₂ and it runs forward.</p>
         <p><b>But adding CO₂ makes surprisingly little HCO₃⁻ here</b>: about 33 nM, while pH falls from 7.40 to 7.14. The H⁺ it would make has
-          nowhere to go, so a few nanomolar is enough to reach equilibrium. The buffers step comes back to that. Next: the enzyme.</p>
+          nowhere to go, so a few nanomolar is enough to reach equilibrium. The buffers step comes back to that.</p>
+        <p>The enzyme would turn both dials up alike and leave the seesaw where it is: it changes how fast, never which way. Next: the enzyme up
+          close, and the zinc at its heart.</p>
         <details><summary>The model, and what it does not claim</summary><BoxModel /></details>
       </>}</Below>
     </main>
@@ -475,8 +516,9 @@ export default function Protons() {
   const bar = <StepBar i={i} go={go} />;
   const id = STEPS[i].id;
   if (id === "enzyme") return <EnzymeStep bar={bar} />;
+  if (id === "pair") return <PairStep key="pair" enzyme={false} bar={bar} />;
+  if (id === "ca") return <PairStep key="ca" enzyme bar={bar} />;
   if (id === "reaction") return <ReactionStep key="reaction" buffers={false} bar={bar} />;
-  if (id === "ca") return <ReactionStep key="ca" buffers={false} enzyme bar={bar} />;
   if (id === "buffers") return <ReactionStep key="buffers" buffers bar={bar} />;
   return <WholeCell bar={bar} />;
 }

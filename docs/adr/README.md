@@ -66,3 +66,4 @@ change so the two never disagree.
 | [0028](0028-the-step-through-opens-on-the-enzyme.md) | The step-through opens on the enzyme, simply | Accepted (Tony asked for a simple glob, both directions, then "build"; the forms are Claude's) |
 | [0029](0029-a-seesaw-and-two-dials-the-numbers-folded.md) | The reaction box shows a seesaw and two dials, its numbers folded; the whole cell regrouped | Accepted (Tony asked for the seesaw, dials and folded table, and the phone hint; the forms are Claude's) |
 | [0030](0030-the-protons-page-opens-on-the-reaction-then-adds-the-enzyme.md) | The protons page opens on the reaction, then adds the enzyme with a slow-motion slider | Accepted (Tony) |
+| [0031](0031-the-protons-page-opens-on-one-pair.md) | The protons page opens on one pair, then the enzyme as a blur, then mass action | Accepted (Tony chose the steps; the forms are Claude's) |
